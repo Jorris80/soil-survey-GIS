@@ -104,7 +104,7 @@
 "use strict";
 /* ===== KONFIGURASI ===== */
 // Untuk mode PWA/GitHub Pages: isi URL Web App (…/exec). Di Apps Script biarkan kosong.
-window.__API_URL__ = window.__API_URL__ || "";
+window.__API_URL__ = window.__API_URL__ || "https://script.google.com/macros/s/AKfycbwGcF-K-p5H7yn3W8VjeBv8DW9wvK_MgdC2NBo6ahwkdDr9kSYbU2b5xQEbD7BqYE-Saw/exec";
 
 /* ===== DATA PILIHAN (dari CSV) ===== */
 var OPSI = {"fisiografi": ["Aluvial (< 10m)", "Teras (< 10 m)", "Plain (0 - 50 m)", "Hilly (50 - 300 m)", "Mountain (> 300 m)"], "topografi": ["Flat (0 - 3 %)", "Undulating (4 - 8 %)", "Rolling (9 - 15 %)", "Moderately Steep (16 - 25 %)", "Steep (26 - 40 %)", "Very Steep (> 40 %)"], "drainase": ["Excessively (ED)", "Somewhat Excessively (SE)", "Well (WD)", "Moderately Well (MD)", "Somewhat Poorly (SP)", "Poorly (PD)", "Very Poorly (VP)", "Subaqueous (SA)", "Ponded (P)", "Flooded (F)", "Non Observed (N)", "Ocean (O)"], "hue": ["5R", "7.5R", "10R", "2.5YR", "5YR", "7.5YR", "10YR", "2.5Y", "5Y", "10Y", "5GY", "GLEY 1", "GLEY 2"], "value": ["2,5", "3", "4", "5", "6", "7", "8"], "chroma": ["1", "2", "3", "4", "6", "8"], "tekstur": ["Coarse sand", "Sand", "Fine sand", "Very fine sand", "Loamy sand", "Sandy loam", "Silt", "Silt loam", "Loam", "Sandy clay loam", "Silty clay loam", "Clay loam", "Sandy clay", "Silty clay", "Clay", "Saprik", "Hemik", "Fibrik"], "konsistensi": ["Extremely Firm", "Very Firm", "Firm - Very Firm", "Firm", "Slightly Firm - Firm", "Slightly Firm", "Friable - Slightly Firm", "Friable", "Very Friable", "Loose", "Nonsticky", "Slightly Sticky", "Moderately Sticky", "Sticky", "Very Sticky"]};
@@ -1932,16 +1932,18 @@ try{window.saveSession=saveSession;window.S=S;}catch(e){}
   }
 
   /* ---------- Inisialisasi: ambil spreadsheet aktif + sesi ---------- */
+  function curSS(){ if(SS) return SS; if(window.S && window.S.ss){SS=window.S.ss;return SS;} try{return localStorage.getItem("ss_ssid")||"";}catch(e){return "";} }
   function boot() {
-    call("getActiveWorkspace").then(function (ws) {
-      SS = (ws && ws.spreadsheetId) || "1qLMRgncmOGZX8FfARLL_mj7VjmaPiVmg8-B6RsOp5js";
-      if (!SS) {
-        try { SS = (JSON.parse(localStorage.getItem("soil_survey_sync_config") || "{}").spreadsheetId) || ""; } catch (e) {}
-      }
-      // Utamakan sesi aplikasi (login username/password); fallback getSessionInfo.
-      var appSess = (window.S && window.S.session) ? window.S.session : null;
-      if (appSess && appSess.username) { return Promise.resolve(appSess); }
-      return call("getSessionInfo", SS || "").catch(function(){ return appSess || {}; });
+    // Utamakan spreadsheet id & sesi dari APLIKASI UTAMA (paling andal, termasuk di PWA).
+    SS = (window.S && window.S.ss) ? window.S.ss : "";
+    if (!SS) { try { SS = localStorage.getItem("ss_ssid") || ""; } catch (e) {} }
+    var appSess0 = (window.S && window.S.session) ? window.S.session : null;
+    var pre = SS ? Promise.resolve(null) : call("getActiveWorkspace").catch(function(){ return null; });
+    pre.then(function (ws) {
+      if (!SS && ws && ws.spreadsheetId) SS = ws.spreadsheetId;
+      // Sesi: utamakan sesi aplikasi (login username/password); fallback getSessionInfo.
+      if (appSess0 && appSess0.username) { return Promise.resolve(appSess0); }
+      return call("getSessionInfo", SS || "").catch(function(){ return appSess0 || {}; });
     }).then(function (s) {
       ME = s || (window.S && window.S.session) || {};
       $("jx-ident").textContent = (ME.name || "Pengguna") + (ME.email ? " · " + ME.email : "");
@@ -1955,7 +1957,7 @@ try{window.saveSession=saveSession;window.S=S;}catch(e){}
   }
 
   function loadMyTtd() {
-    call("fetchSignatures", SS, { personalOnly: true }).then(function (list) {
+    call("fetchSignatures", SS, { personalOnly: true, username: (ME && ME.username) || "", email: (ME && ME.email) || "" }).then(function (list) {
       var mine = (list || [])[0];
       MYTTD = mine ? mine.ttd : "";
       $("jx-ttdnow").innerHTML = MYTTD
@@ -1980,7 +1982,8 @@ try{window.saveSession=saveSession;window.S=S;}catch(e){}
     e.target.value = "";
   });
   $("jx-simpanprofil").addEventListener("click", function () {
-    if (!SS) { msg("jx-msg-p", "Spreadsheet belum terhubung.", false); return; }
+    SS = curSS(); if (!SS) { msg("jx-msg-p", "Spreadsheet belum terhubung.", false); return; }
+    if (!ME || !ME.username) { ME = (window.S && window.S.session) || ME || {}; }
     var foto = fotoSaatIni();
     var btn = this; btn.disabled = true;
     call("updateMyProfile", SS, { username: (ME && ME.username) || "", email: (ME && ME.email) || "", nama: $("jx-nama").value, jabatan: $("jx-jabatan").value, foto: foto })
@@ -2025,7 +2028,8 @@ try{window.saveSession=saveSession;window.S=S;}catch(e){}
 
   $("jx-hapuspad").addEventListener("click", function () { if (ctx) { var r = pad.getBoundingClientRect(); ctx.clearRect(0, 0, pad.width, pad.height); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, r.width, r.height); } dirty = false; });
   $("jx-simpanttd").addEventListener("click", function () {
-    if (!SS) { msg("jx-msg-t", "Spreadsheet belum terhubung.", false); return; }
+    SS = curSS(); if (!SS) { msg("jx-msg-t", "Spreadsheet belum terhubung. Buka menu Sync & pastikan database aktif.", false); return; }
+    if (!ME || !ME.username) { ME = (window.S && window.S.session) || ME || {}; }
     if (!ctx) { if (!padInit()) { msg("jx-msg-t", "Kanvas belum siap, coba lagi.", false); return; } }
     if (!dirty) { msg("jx-msg-t", "Bubuhkan tanda tangan dahulu.", false); return; }
     // Ekspor sebagai JPEG (latar putih) agar ukuran kecil & pasti valid
