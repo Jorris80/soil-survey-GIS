@@ -1934,7 +1934,7 @@ try{window.saveSession=saveSession;window.S=S;}catch(e){}
   /* ---------- Inisialisasi: ambil spreadsheet aktif + sesi ---------- */
   function boot() {
     call("getActiveWorkspace").then(function (ws) {
-      SS = (ws && ws.spreadsheetId) || "";
+      SS = (ws && ws.spreadsheetId) || "1qLMRgncmOGZX8FfARLL_mj7VjmaPiVmg8-B6RsOp5js";
       if (!SS) {
         try { SS = (JSON.parse(localStorage.getItem("soil_survey_sync_config") || "{}").spreadsheetId) || ""; } catch (e) {}
       }
