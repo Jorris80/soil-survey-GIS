@@ -1,0 +1,2270 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Database Soil Survey & GIS Sync</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="manifest" href="./manifest.json" />
+<meta name="theme-color" content="#1b4d3e" />
+<link rel="apple-touch-icon" href="./icon-192.png" />
+<script>
+  window.__API_URL__ = window.__API_URL__ || "https://script.google.com/macros/s/AKfycbwGcF-K-p5H7yn3W8VjeBv8DW9wvK_MgdC2NBo6ahwkdDr9kSYbU2b5xQEbD7BqYE-Saw/exec";
+  (function(){var h=location.host||"";if(h.indexOf("script.google.com")===-1&&h.indexOf("googleusercontent.com")===-1&&"serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("./sw.js").catch(function(e){console.warn("SW:",e);});});}})();
+</script>
+<style>
+  :root{--hijau:#1b4d3e;--hijau2:#425046;--krem:#FDFDF9;--krem2:#EAEAE2;--garis:#D5D5CD;--teks:#2D2D29;--redup:#6B6B5F;--gelap:#1C241F}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--krem2);color:var(--teks);font-size:14px;line-height:1.5}
+  input,select,textarea,button{font-family:inherit}
+  @media(max-width:768px){input,select,textarea{font-size:16px!important}}
+  a{color:var(--hijau)}
+  /* Header */
+  header{background:var(--gelap);color:#F5F5F0;position:sticky;top:0;z-index:30;padding:9px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+  header .ttl{font-size:14px;font-weight:800;display:flex;align-items:center;gap:7px}
+  header .badge{font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;border:1px solid}
+  .b-on{background:rgba(6,78,59,.4);border-color:rgba(16,185,129,.4);color:#6ee7b7}
+  .b-off{background:rgba(127,29,29,.4);border-color:rgba(239,68,68,.4);color:#fca5a5}
+  .b-adm{background:rgba(6,78,59,.4);border-color:rgba(16,185,129,.4);color:#6ee7b7}
+  .b-edt{background:rgba(30,58,138,.4);border-color:rgba(59,130,246,.4);color:#93c5fd}
+  .b-vwr{background:rgba(120,53,15,.4);border-color:rgba(245,158,11,.4);color:#fcd34d}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+  .pulse{animation:pulse 1.5s infinite}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  /* Layout */
+  main{max-width:1180px;margin:0 auto;padding:14px;padding-bottom:90px}
+  .card{background:#fff;border:1px solid var(--garis);border-radius:14px;padding:16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+  .card h3{margin:0 0 4px;font-size:14px;font-weight:800;color:var(--gelap);display:flex;align-items:center;gap:7px}
+  .card .sub{font-size:11px;color:var(--redup);margin-bottom:10px}
+  .grid{display:grid;gap:10px}.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:1fr 1fr 1fr}.g4{grid-template-columns:repeat(4,1fr)}
+  @media(max-width:600px){.g3,.g4{grid-template-columns:1fr 1fr}}
+  label.lbl{display:block;font-size:9px;font-weight:800;color:#666;margin-bottom:3px;letter-spacing:.4px;text-transform:uppercase}
+  .in{width:100%;background:var(--krem);border:1px solid var(--garis);border-radius:10px;padding:9px 10px;outline:none;font-size:13px}
+  .in:focus{border-color:var(--hijau);background:#fff}
+  textarea.in{resize:vertical;min-height:60px}
+  .hint{font-size:9px;color:#8f8f80;margin-top:2px}
+  .btn{border:none;border-radius:11px;padding:11px 14px;font-size:13px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+  .btn-p{background:var(--hijau);color:#fff}.btn-p:hover{background:#133a2e}
+  .btn-s{background:#fff;color:var(--hijau2);border:1px solid var(--garis)}.btn-s:hover{background:var(--krem)}
+  .btn-d{background:#fff;color:#dc2626;border:1px solid #fecaca}
+  .btn:disabled{opacity:.5;cursor:default}
+  .btn-full{width:100%}
+  .row{display:flex;gap:8px;align-items:center}
+  .sep{border-top:1px solid var(--krem2);margin:12px 0;padding-top:12px}
+  /* Tab bar bawah */
+  nav.bnav{position:fixed;bottom:0;left:0;right:0;z-index:40;background:#fff;border-top:1px solid var(--garis);display:grid;grid-template-columns:repeat(5,1fr);box-shadow:0 -3px 10px rgba(0,0,0,.06);padding-bottom:env(safe-area-inset-bottom,0)}
+  nav.bnav button{background:none;border:none;padding:8px 2px 10px;font-size:10px;font-weight:800;color:#55554E;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px}
+  nav.bnav button.on{color:var(--hijau)}
+  nav.bnav .ic{font-size:17px;line-height:1}
+  /* Tabel */
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th,td{border:1px solid var(--garis);padding:5px 6px;text-align:left}
+  th{background:var(--krem2);font-weight:800;font-size:10px}
+  .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  /* kartu record */
+  .rec{background:var(--krem);border:1px solid var(--garis);border-radius:11px;padding:10px;margin-bottom:8px}
+  .rec.sel{background:#dcf3e8;border-color:var(--hijau)}
+  .rec .id{font-weight:800;font-size:13px}
+  .chipbar{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .chip{font-size:10px;font-weight:700;padding:3px 8px;border-radius:8px;background:#fff;border:1px solid var(--garis);color:var(--hijau2);cursor:pointer}
+  .msg{padding:9px 11px;border-radius:10px;font-size:12px;margin:8px 0;display:none}
+  .msg.ok{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;display:block}
+  .msg.err{background:#fef2f2;color:#991b1b;border:1px solid #fecaca;display:block}
+  .msg.info{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;display:block}
+  #map,#mapKolab{width:100%;height:340px;border-radius:12px;border:1px solid var(--garis)}
+  .step-ind{display:flex;gap:6px;margin-bottom:12px}
+  .step-ind div{flex:1;height:4px;border-radius:2px;background:var(--krem2)}
+  .step-ind div.on{background:var(--hijau)}
+  .hz-item{background:var(--krem);border:1px solid var(--garis);border-radius:10px;padding:8px;margin-bottom:6px;font-size:11px}
+  .modal{position:fixed;inset:0;background:rgba(28,36,31,.55);z-index:50;display:none;align-items:flex-end;justify-content:center}
+  @media(min-width:769px){.modal{align-items:center}}
+  .modal .box{background:var(--krem);width:100%;max-width:560px;max-height:88vh;overflow-y:auto;border-radius:18px 18px 0 0;padding:16px}
+  @media(min-width:769px){.modal .box{border-radius:18px}}
+  /* Lightbox foto (zoom & geser) */
+  #lb{position:fixed;inset:0;background:rgba(15,20,17,.92);z-index:9999;display:none;align-items:center;justify-content:center;touch-action:none}
+  #lb.on{display:flex}
+  #lb img{max-width:96vw;max-height:88vh;transform-origin:center center;transition:transform .05s linear;cursor:grab;user-select:none;-webkit-user-drag:none}
+  #lb .lb-x{position:absolute;top:14px;right:16px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.15);color:#fff;border:none;font-size:22px;cursor:pointer}
+  #lb .lb-ctl{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);display:flex;gap:8px;background:rgba(0,0,0,.4);padding:8px 12px;border-radius:30px}
+  #lb .lb-ctl button{width:40px;height:40px;border-radius:50%;border:none;background:rgba(255,255,255,.18);color:#fff;font-size:18px;font-weight:800;cursor:pointer}
+  #lb .lb-cap{position:absolute;top:16px;left:16px;color:#fff;font-size:12px;background:rgba(0,0,0,.4);padding:6px 12px;border-radius:20px;max-width:70vw}
+  .spin{display:inline-block;width:14px;height:14px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:sp 0.7s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="app"><div style="padding:60px 20px;text-align:center;color:#6B6B5F">Memuat aplikasi…</div></div>
+<div id="lb" onclick="if(event.target.id==='lb')lbClose()">
+  <div class="lb-cap" id="lbCap"></div>
+  <button class="lb-x" onclick="lbClose()">×</button>
+  <img id="lbImg" alt="foto" />
+  <div class="lb-ctl"><button onclick="lbZoom(-0.3)">−</button><button onclick="lbZoom(0.3)">+</button><button onclick="lbReset()" style="font-size:13px">⟲</button></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+"use strict";
+/* ===== KONFIGURASI ===== */
+// Untuk mode PWA/GitHub Pages: isi URL Web App (…/exec). Di Apps Script biarkan kosong.
+window.__API_URL__ = window.__API_URL__ || "";
+
+/* ===== DATA PILIHAN (dari CSV) ===== */
+var OPSI = {"fisiografi": ["Aluvial (< 10m)", "Teras (< 10 m)", "Plain (0 - 50 m)", "Hilly (50 - 300 m)", "Mountain (> 300 m)"], "topografi": ["Flat (0 - 3 %)", "Undulating (4 - 8 %)", "Rolling (9 - 15 %)", "Moderately Steep (16 - 25 %)", "Steep (26 - 40 %)", "Very Steep (> 40 %)"], "drainase": ["Excessively (ED)", "Somewhat Excessively (SE)", "Well (WD)", "Moderately Well (MD)", "Somewhat Poorly (SP)", "Poorly (PD)", "Very Poorly (VP)", "Subaqueous (SA)", "Ponded (P)", "Flooded (F)", "Non Observed (N)", "Ocean (O)"], "hue": ["5R", "7.5R", "10R", "2.5YR", "5YR", "7.5YR", "10YR", "2.5Y", "5Y", "10Y", "5GY", "GLEY 1", "GLEY 2"], "value": ["2,5", "3", "4", "5", "6", "7", "8"], "chroma": ["1", "2", "3", "4", "6", "8"], "tekstur": ["Coarse sand", "Sand", "Fine sand", "Very fine sand", "Loamy sand", "Sandy loam", "Silt", "Silt loam", "Loam", "Sandy clay loam", "Silty clay loam", "Clay loam", "Sandy clay", "Silty clay", "Clay", "Saprik", "Hemik", "Fibrik"], "konsistensi": ["Extremely Firm", "Very Firm", "Firm - Very Firm", "Firm", "Slightly Firm - Firm", "Slightly Firm", "Friable - Slightly Firm", "Friable", "Very Friable", "Loose", "Nonsticky", "Slightly Sticky", "Moderately Sticky", "Sticky", "Very Sticky"]};
+
+/* ===== STATE ===== */
+var S = {
+  ss: "", session: null, online: navigator.onLine,
+  tab: "form", step: 1,
+  records: [], profils: [],
+  form: emptyForm(), editingId: null,
+  horizons: [], hzDraft: emptyHz(),
+  selId: null,
+  pForm: emptyProfil(), pEditingId: null, pHorizons: [], pHzDraft: emptyPHz(), pLab: [], pSelId: null, pQ: "",
+  token: "gas" // penanda; backend pakai identitas Google-nya sendiri
+};
+
+function emptyForm(){return{
+  borId:"",latitude:0,longitude:0,gps:"",surveyorName:"",surveyDate:new Date().toISOString().slice(0,10),
+  perusahaan:"",kebun:"",rintis:"",noBor:"",fisiografi:"",topografi:"",lerengMaks:"",bahanInduk:"",vegetasi:"",
+  kedalamanEfektif:"",airTanah:"",drainase:"",horizonSementara:"",epipedon:"",bawahPermukaan:"",klasifikasi:"",
+  altitude:0,jenisTanah:"",teksturTopsoil:"",teksturSubsoil:"",fotos:[],
+  pH_H2O_Topsoil:"",pH_H2O_Subsoil:"",pH_H2O2_Topsoil:"",pH_H2O2_Subsoil:"",
+  ecTopsoil:"",ecSubsoil:"",tdsTopsoil:"",tdsSubsoil:"",notes:""
+};}
+function emptyHz(){return{
+  depthFrom:0,depthTo:0,horizonName:"",horizonSuffix:"",
+  warnaMatrik_Hue:"",warnaMatrik_Value:"",warnaMatrik_Chroma:"",
+  warnaKaratan_Hue:"",warnaKaratan_Value:"",warnaKaratan_Chroma:"",
+  warnaCampuran_Hue:"",warnaCampuran_Value:"",warnaCampuran_Chroma:"",
+  texture:"",consistency:"",gravelPercent:"",
+  pH_H2O:"",pH_H2O2:"",pH_HCL:"",ec:"",tds:"",keterangan:""
+};}
+
+
+/* ===== PROFIL TANAH ===== */
+function emptyProfil(){return{
+  pedonNo:"",simbol:"",klasUsda:"",klasFao:"",klasPpt:"",lokasi:"",fisiografi:"",ketinggian:"",kemiringan:"",
+  vegetasi:"",bahanInduk:"",drainase:"",kelembaban:"",mukaAir:"",batuan:"",erosi:"",surveyor:"",
+  tanggal:new Date().toISOString().slice(0,10),catatan:"",foto:"",latitude:0,longitude:0,
+  fieldSheet:{posisiFisiografis:"",topografiSekitar:"",mikrotopografi:"",kondisiKelembaban:"",ukuranBatuan:"",proporsiBatuan:"",singkapanBatuan:"",saltAlkali:"",pengaruhManusia:""}
+};}
+function emptyPHz(){return{
+  horizonName:"",depthFrom:0,depthTo:0,
+  warna:"",karatan:"",tekstur:"",struktur:"",konsistensi:"",kutan:"",sementasi:"",padas:"",pori:"",akar:"",batuanMineral:"",batas:"",deskripsi:""
+};}
+function emptyLab(){return{depthFrom:0,depthTo:0,pasir:"",debu:"",liat:"",phH2o:"",phKcl:"",ash:"",cOrg:"",nTot:"",cn:"",p2o5:"",k2o:"",pBray:"",cec:"",ca:"",mg:"",k:"",na:"",al:"",h:"",ecec:"",alSat:"",acidSat:"",baseSat:"",fe:"",mn:"",zn:"",cu:"",b:"",cond:"",levels:{}};}
+
+/* ===== LIGHTBOX ditambahkan di atas =====*/
+/* ===== LIGHTBOX FOTO (zoom & geser, pinch di HP) ===== */
+var _lb={sc:1,x:0,y:0,drag:false,px:0,py:0,pinch:0};
+function lbOpen(src,cap){if(!src)return;var el=$("#lb"),img=$("#lbImg");img.src=src;$("#lbCap").textContent=cap||"";_lb={sc:1,x:0,y:0,drag:false,px:0,py:0,pinch:0};lbApply();el.classList.add("on");}
+function lbClose(){$("#lb").classList.remove("on");$("#lbImg").src="";}
+function lbApply(){var img=$("#lbImg");if(img)img.style.transform="translate("+_lb.x+"px,"+_lb.y+"px) scale("+_lb.sc+")";}
+function lbZoom(d){_lb.sc=Math.min(6,Math.max(1,_lb.sc+d));if(_lb.sc===1){_lb.x=0;_lb.y=0;}lbApply();}
+function lbReset(){_lb.sc=1;_lb.x=0;_lb.y=0;lbApply();}
+(function(){
+  function bind(){
+    var img=$("#lbImg");if(!img)return;
+    img.addEventListener("wheel",function(e){e.preventDefault();lbZoom(e.deltaY<0?0.25:-0.25);},{passive:false});
+    img.addEventListener("mousedown",function(e){if(_lb.sc<=1)return;_lb.drag=true;_lb.px=e.clientX-_lb.x;_lb.py=e.clientY-_lb.y;img.style.cursor="grabbing";});
+    window.addEventListener("mousemove",function(e){if(!_lb.drag)return;_lb.x=e.clientX-_lb.px;_lb.y=e.clientY-_lb.py;lbApply();});
+    window.addEventListener("mouseup",function(){_lb.drag=false;var im=$("#lbImg");if(im)im.style.cursor="grab";});
+    img.addEventListener("dblclick",function(){_lb.sc>1?lbReset():lbZoom(1.5);});
+    // Sentuh: pinch + geser
+    img.addEventListener("touchstart",function(e){if(e.touches.length===2){_lb.pinch=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);}else if(e.touches.length===1&&_lb.sc>1){_lb.drag=true;_lb.px=e.touches[0].clientX-_lb.x;_lb.py=e.touches[0].clientY-_lb.y;}},{passive:false});
+    img.addEventListener("touchmove",function(e){e.preventDefault();if(e.touches.length===2&&_lb.pinch){var d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);_lb.sc=Math.min(6,Math.max(1,_lb.sc*(d/_lb.pinch)));_lb.pinch=d;if(_lb.sc===1){_lb.x=0;_lb.y=0;}lbApply();}else if(e.touches.length===1&&_lb.drag){_lb.x=e.touches[0].clientX-_lb.px;_lb.y=e.touches[0].clientY-_lb.py;lbApply();}},{passive:false});
+    img.addEventListener("touchend",function(e){if(e.touches.length<2)_lb.pinch=0;if(e.touches.length===0)_lb.drag=false;});
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",bind);else setTimeout(bind,100);
+})();
+
+/* ===== JEMBATAN BACKEND (google.script.run atau fetch/PWA) ===== */
+function isOffline(e){return !navigator.onLine||(e&&/__OFFLINE__|Failed to fetch|NetworkError|network error/i.test(e.message||""));}
+function call(fn){
+  var args=[].slice.call(arguments,1);
+  return new Promise(function(res,rej){
+    var api=window.__API_URL__;
+    if(window.google&&google.script&&google.script.run){
+      var ja=args.map(function(a){return JSON.stringify(a===undefined?null:a);});
+      google.script.run.withSuccessHandler(function(r){try{res(r?JSON.parse(r):null);}catch(e){res(r);}})
+        .withFailureHandler(function(e){rej(new Error(e&&e.message?e.message:String(e)));})[fn].apply(null,ja);
+    } else if(api){
+      if(!navigator.onLine){rej(new Error("__OFFLINE__"));return;}
+      fetch(api,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({fn:fn,args:args})})
+        .then(function(r){return r.text();}).then(function(t){
+          var env=JSON.parse(t); if(!env.ok)throw new Error(env.error||"Gagal");
+          var d=env.data; res(typeof d==="string"&&d?JSON.parse(d):d);
+        }).catch(function(e){rej(new Error((e&&e.message)||"__OFFLINE__"));});
+    } else rej(new Error("Backend tidak tersedia. Buka via URL Web App (/exec)."));
+  });
+}
+
+/* ===== UTIL ===== */
+function $(s,el){return (el||document).querySelector(s);}
+function $$(s,el){return [].slice.call((el||document).querySelectorAll(s));}
+function esc(t){return String(t==null?"":t).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+function esca(t){return String(t==null?"":t).replace(/"/g,"&quot;");}
+function num(v){var n=parseFloat(String(v).replace(",","."));return isFinite(n)?n:0;}
+function toast(text,type){var m=$("#toast");if(!m)return;m.textContent=text;m.className="msg "+(type||"info");m.style.display="block";clearTimeout(m._t);m._t=setTimeout(function(){m.style.display="none";},5000);}
+function fmtDepth(a,b){return b&&b>a?a+" – "+b:String(a);}
+
+/* Combo-box: kosong / manual / dropdown CSV.
+   Memakai <input list=...> + <datalist>. Selalu bisa dikosongkan & diketik bebas. */
+function combo(field,label,opsiKey,val,ph){
+  var id="dl_"+opsiKey;
+  var opts=(OPSI[opsiKey]||[]).map(function(o){return '<option value="'+esca(o)+'"></option>';}).join("");
+  return '<div><label class="lbl">'+esc(label)+'</label>'+
+    '<input class="in" list="'+id+'" value="'+esca(val)+'" placeholder="'+esca(ph||"kosong / ketik / pilih")+'" '+
+    'oninput="setField(\''+field+'\',this.value)" autocomplete="off" />'+
+    '<datalist id="'+id+'">'+opts+'</datalist>'+
+    '<div class="hint">Boleh dikosongkan, diketik manual, atau pilih dari daftar.</div></div>';
+}
+function inField(field,label,val,type,ph){
+  return '<div><label class="lbl">'+esc(label)+'</label>'+
+    '<input class="in" type="'+(type||"text")+'" value="'+esca(val)+'" placeholder="'+esca(ph||"")+'" '+
+    (type==="number"?'step="any" ':'')+'oninput="setField(\''+field+'\',this.value)" /></div>';
+}
+function parseFotos(r){
+  if(r.fotos&&r.fotos.length)return r.fotos.slice();
+  var f=r.foto;if(!f)return [];
+  if(typeof f==="string"){
+    if(f.charAt(0)==="["){try{var a=JSON.parse(f);return Array.isArray(a)?a.filter(Boolean):[];}catch(e){}}
+    if(/^data:|^https?:/.test(f))return [f];
+  }
+  return [];
+}
+function setField(f,v){S.form[f]=v;}
+function setHz(f,v){S.hzDraft[f]=v;}
+
+/* Tanggal: terkunci real-time; hanya admin boleh koreksi (mode edit).
+   - Record baru: tanggal = hari ini, dikunci (readonly), tak bisa dimanipulasi.
+   - Admin saat mengedit record: tanggal bisa diubah untuk koreksi data. */
+function isAdmin(){return !!(S.session&&S.session.role==="admin");}
+function dateField(val){
+  var editable = isAdmin() && S.editingId; // admin mengoreksi data lama
+  if(editable){
+    return '<div><label class="lbl">Tanggal <span style="color:#b45309">(admin: dapat dikoreksi)</span></label>'+
+      '<input class="in" type="date" value="'+esca(val)+'" oninput="setField(\'surveyDate\',this.value)" /></div>';
+  }
+  return '<div><label class="lbl">Tanggal <span style="color:#6B6B5F">(terkunci · real-time)</span></label>'+
+    '<input class="in" type="date" value="'+esca(val)+'" readonly disabled style="background:#f0f0ea;color:#555" />'+
+    '<div class="hint">Tanggal otomatis mengikuti waktu pengambilan data & tidak dapat diubah. Koreksi hanya oleh admin saat mengedit.</div></div>';
+}
+
+/* Ambil & kompres foto (kamera/galeri). Maks 1280px, JPEG kualitas 0.8. */
+function pickFoto(input){
+  var files=input.files?[].slice.call(input.files):[]; if(!files.length)return;
+  if(!S.form.fotos)S.form.fotos=[];
+  var jobs=files.map(function(f){return compressImg(f,1280,0.8);});
+  Promise.all(jobs).then(function(list){
+    list.forEach(function(d){S.form.fotos.push(d);});
+    renderFotoGaleri();
+    toast(list.length+" foto ditambahkan.","ok");
+  }).catch(function(e){toast("Gagal memuat foto: "+e.message,"err");});
+  input.value="";
+}
+function renderFotoGaleri(){
+  var prev=$("#fotoPrev");if(!prev)return;
+  var fotos=S.form.fotos||[];
+  prev.innerHTML=fotos.length?('<div style="display:flex;gap:6px;flex-wrap:wrap">'+fotos.map(function(d,i){
+    return '<div style="position:relative"><img src="'+esca(d)+'" style="width:90px;height:90px;object-fit:cover;border-radius:8px;border:1px solid var(--garis);cursor:zoom-in" onclick="lbOpen(this.src,\'Foto Bor '+(i+1)+'\')"/><button onclick="S.form.fotos.splice('+i+',1);renderFotoGaleri()" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:#dc2626;color:#fff;border:2px solid #fff;font-size:11px;cursor:pointer;line-height:1">×</button></div>';
+  }).join("")+'</div>'):"";
+}
+function compressImg(file,maxPx,q){
+  return new Promise(function(res,rej){
+    var fr=new FileReader();
+    fr.onload=function(){
+      var img=new Image();
+      img.onload=function(){
+        var w=img.width,h=img.height,sc=Math.min(1,maxPx/Math.max(w,h));
+        var c=document.createElement("canvas");c.width=Math.round(w*sc);c.height=Math.round(h*sc);
+        c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+        res(c.toDataURL("image/jpeg",q||0.8));
+      };
+      img.onerror=function(){rej(new Error("format tidak didukung"));};
+      img.src=fr.result;
+    };
+    fr.onerror=function(){rej(new Error("baca file gagal"));};
+    fr.readAsDataURL(file);
+  });
+}
+</script>
+
+<script>
+/* ===== RENDER KERANGKA ===== */
+function render(){
+  var s=S.session||{};
+  var roleBadge = s.role==="admin"?'<span class="badge b-adm">ADMIN</span>'
+    : s.role==="editor"?'<span class="badge b-edt">EDITOR'+(s.allowedPt&&s.allowedPt.length?" · "+s.allowedPt.length+" PT":"")+'</span>'
+    : s.role==="viewer"?'<span class="badge b-vwr">VIEWER'+(s.allowedPt&&s.allowedPt.length?" · "+s.allowedPt.length+" PT":"")+'</span>'
+    : '';
+  var online=navigator.onLine;
+  var pend=(typeof pendingCount==="function")?pendingCount():0;
+  var html='<header>'+
+    '<div class="ttl">🌏 Soil Survey GIS</div>'+
+    '<div class="row">'+
+      (pend?'<span class="badge" style="background:#fef3c7;color:#92400e" title="Data belum tersinkron">⏳ '+pend+'</span>':'')+
+      '<span class="badge '+(online?"b-on":"b-off")+'"><span class="dot '+(online?"pulse":"")+'" style="background:'+(online?"#34d399":"#f87171")+'"></span> '+(online?"Online":"Offline")+'</span>'+
+      roleBadge+
+      (s.username?'<span style="font-size:11px;color:#e8efe9;margin-left:2px">'+esc(s.name||s.username)+'</span>':'')+
+      '<button onclick="logout()" title="Keluar" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:8px;padding:4px 8px;font-size:11px;cursor:pointer;margin-left:4px">Keluar</button>'+
+    '</div>'+
+  '</header>'+
+  '<main id="main">'+viewFor(S.tab)+'</main>'+
+  '<div id="toast" class="msg" style="position:fixed;bottom:80px;left:14px;right:14px;z-index:60;max-width:1150px;margin:0 auto"></div>'+
+  '<nav class="bnav" style="grid-template-columns:repeat(6,1fr)">'+
+    navBtn("form","➕","Boring")+
+    navBtn("profil","🧱","Profil")+
+    navBtn("db","🗂️","Database")+
+    navBtn("map","🗺️","Peta")+
+    navBtn("stat","📊","Statistik")+
+    navBtn("sync","📁","Sync")+
+  '</nav>';
+  $("#app").innerHTML=html;
+  if(S.tab==="map")setTimeout(initMap,60);
+  if(S.tab==="form")setTimeout(bindStepScroll,10);
+}
+function navBtn(t,ic,lbl){return '<button class="'+(S.tab===t?"on":"")+'" onclick="go(\''+t+'\')"><span class="ic">'+ic+'</span>'+lbl+'</button>';}
+function go(t){S.tab=t;render();}
+/* viewFor didefinisikan di bagian statistik (js9) agar mencakup tab Statistik */
+
+/* ===== TAB: FORM TITIK BOR ===== */
+function viewForm(){
+  var canEdit=!S.session||S.session.role==="admin"||S.session.role==="editor";
+  var f=S.form;
+  var st=S.step;
+  var body="";
+  if(st===1){ // Identitas & lokasi
+    body='<div class="grid g2">'+
+      inField("borId","Bor ID *",f.borId,"text","BOR-001")+
+      dateField(f.surveyDate)+
+      inField("surveyorName","Surveyor",f.surveyorName)+
+      inField("noBor","No. Bor",f.noBor)+
+      inField("perusahaan","Perusahaan (PT)",f.perusahaan)+
+      inField("kebun","Kebun / Estate",f.kebun)+
+      inField("rintis","Rintis",f.rintis)+
+      inField("vegetasi","Vegetasi",f.vegetasi)+
+    '</div>'+
+    '<div class="sep"><label class="lbl">Koordinat GPS</label>'+
+      '<button class="btn btn-p btn-full" onclick="ambilGPS()">📍 Ambil Lokasi GPS Saya</button>'+
+      '<div class="grid g3" style="margin-top:8px">'+
+        inField("latitude","Latitude",f.latitude,"number")+
+        inField("longitude","Longitude",f.longitude,"number")+
+        inField("altitude","Altitude (m)",f.altitude,"number")+
+      '</div>'+
+    '</div>'+
+    '<div class="sep"><label class="lbl">Foto Titik Bor</label>'+
+      '<div class="row">'+
+        '<label class="btn btn-s" style="flex:1">📷 Kamera<input type="file" accept="image/*" capture="environment" style="display:none" onchange="pickFoto(this)"/></label>'+
+        '<label class="btn btn-s" style="flex:1">🖼️ Galeri<input type="file" accept="image/*" multiple style="display:none" onchange="pickFoto(this)"/></label>'+
+      '</div>'+
+      '<div id="fotoPrev" style="margin-top:8px">'+((f.fotos&&f.fotos.length)?'<div style="display:flex;gap:6px;flex-wrap:wrap">'+f.fotos.map(function(d,i){return '<div style="position:relative"><img src="'+esca(d)+'" style="width:90px;height:90px;object-fit:cover;border-radius:8px;border:1px solid var(--garis);cursor:zoom-in" onclick="lbOpen(this.src,\'Foto Bor\')"/><button onclick="S.form.fotos.splice('+i+',1);renderFotoGaleri()" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:#dc2626;color:#fff;border:2px solid #fff;font-size:11px;cursor:pointer;line-height:1">×</button></div>';}).join("")+'</div>':'')+'</div>'+
+      '<div class="hint">Bisa lebih dari satu foto. Otomatis dikompres (≤1280px, JPEG). Diunggah ke Google Drive saat menyimpan.</div>'+
+    '</div>';
+  } else if(st===2){ // Fisiografi / topografi / drainase (COMBO CSV)
+    body='<div class="grid g2">'+
+      combo("fisiografi","Fisiografi","fisiografi",f.fisiografi)+
+      combo("topografi","Topografi","topografi",f.topografi)+
+      inField("lerengMaks","Lereng Maks (%)",f.lerengMaks,"text")+
+      combo("drainase","Drainase Tanah","drainase",f.drainase)+
+      inField("bahanInduk","Bahan Induk",f.bahanInduk)+
+      inField("kedalamanEfektif","Kedalaman Efektif (cm)",f.kedalamanEfektif)+
+      inField("airTanah","Air Tanah",f.airTanah)+
+      inField("horizonSementara","Horizon Sementara",f.horizonSementara)+
+    '</div>';
+  } else if(st===3){ // Klasifikasi + tekstur & pH topsoil/subsoil (DIKEMBALIKAN)
+    body='<div class="grid g2">'+
+      inField("epipedon","Epipedon",f.epipedon)+
+      inField("bawahPermukaan","Bawah Permukaan",f.bawahPermukaan)+
+      inField("klasifikasi","Klasifikasi",f.klasifikasi)+
+      inField("jenisTanah","Jenis Tanah",f.jenisTanah)+
+    '</div>'+
+    '<div class="sep"><label class="lbl" style="font-size:11px;color:var(--hijau)">Tekstur & Kimia Topsoil / Subsoil</label>'+
+    '<div class="grid g2" style="margin-top:6px">'+
+      combo("teksturTopsoil","Tekstur Topsoil","tekstur",f.teksturTopsoil)+
+      combo("teksturSubsoil","Tekstur Subsoil","tekstur",f.teksturSubsoil)+
+      inField("pH_H2O_Topsoil","pH H₂O Topsoil",f.pH_H2O_Topsoil,"number")+
+      inField("pH_H2O_Subsoil","pH H₂O Subsoil",f.pH_H2O_Subsoil,"number")+
+      inField("pH_H2O2_Topsoil","pH H₂O₂ Topsoil",f.pH_H2O2_Topsoil,"number")+
+      inField("pH_H2O2_Subsoil","pH H₂O₂ Subsoil",f.pH_H2O2_Subsoil,"number")+
+      inField("ecTopsoil","EC Topsoil",f.ecTopsoil,"number")+
+      inField("ecSubsoil","EC Subsoil",f.ecSubsoil,"number")+
+      inField("tdsTopsoil","TDS Topsoil",f.tdsTopsoil,"number")+
+      inField("tdsSubsoil","TDS Subsoil",f.tdsSubsoil,"number")+
+    '</div></div>'+
+    '<div class="sep">'+inField("notes","Catatan",f.notes)+'</div>';
+  } else if(st===4){ // Horizon (tabel relasi) + combo hue/value/chroma/tekstur/konsistensi
+    body=hzSection();
+  }
+  var nav='<div class="row" style="margin-top:14px;justify-content:space-between">'+
+    (st>1?'<button class="btn btn-s" onclick="stepTo('+(st-1)+')">← Kembali</button>':'<span></span>')+
+    (st<4?'<button class="btn btn-p" onclick="stepTo('+(st+1)+')">Lanjut →</button>':
+      (canEdit?'<button class="btn btn-p" id="btnSave" onclick="saveRecord()">💾 '+(S.editingId?"Update Record":"Simpan Record")+'</button>':'<span class="hint" style="color:#b45309">Mode viewer: tidak bisa menyimpan.</span>'))+
+  '</div>';
+  var steps='<div class="step-ind">'+[1,2,3,4].map(function(i){return '<div class="'+(i<=st?"on":"")+'"></div>';}).join("")+'</div>';
+  return '<div class="card">'+
+    '<h3>📝 '+(S.editingId?"Edit Titik Bor":"Formulir Titik Bor")+'</h3>'+
+    '<div class="sub">Langkah '+st+' dari 4 · '+["Identitas & Lokasi","Fisiografi & Lahan","Klasifikasi & Kimia","Horizon (Relasi)"][st-1]+'</div>'+
+    steps+body+nav+
+  '</div>';
+}
+function stepTo(n){if(n<1)n=1;if(n>4)n=4;S.step=n;var m=$("#main");if(m)m.innerHTML=viewForm();window.scrollTo(0,0);}
+function bindStepScroll(){}
+
+/* Horizon section (tabel relasi) */
+function hzSection(){
+  var d=S.hzDraft;
+  var list=S.horizons.slice().sort(function(a,b){return a.depthFrom-b.depthFrom;}).map(function(h,i){
+    return '<div class="hz-item"><div class="row" style="justify-content:space-between">'+
+      '<b>'+esc(h.horizonName||"-")+(h.horizonSuffix?esc(h.horizonSuffix):"")+' <span style="font-weight:400;color:#6B6B5F">('+fmtDepth(h.depthFrom,h.depthTo)+' cm)</span></b>'+
+      '<button class="chip" style="color:#dc2626;border-color:#fecaca" onclick="delHz('+i+')">Hapus</button></div>'+
+      '<div style="margin-top:3px;color:#55554E">'+
+        (h.warnaMatrik_Hue||h.warnaMatrik_Value||h.warnaMatrik_Chroma?('Warna: '+esc([h.warnaMatrik_Hue,h.warnaMatrik_Value&&h.warnaMatrik_Chroma?h.warnaMatrik_Value+"/"+h.warnaMatrik_Chroma:(h.warnaMatrik_Value||h.warnaMatrik_Chroma)].filter(Boolean).join(" "))+' · '):'')+
+        (h.texture?'Tekstur: '+esc(h.texture)+' · ':'')+
+        (h.consistency?'Konsistensi: '+esc(h.consistency)+' · ':'')+
+        (h.pH_H2O?'pH H₂O: '+esc(h.pH_H2O):'')+
+      '</div></div>';
+  }).join("");
+  return '<div class="sub" style="margin-bottom:8px">Tabel relasi horizon untuk Bor ID <b>'+esc(S.form.borId||"(isi dulu)")+'</b>. Kolom warna/tekstur/konsistensi: kosong / manual / pilih daftar.</div>'+
+    (list?'<div style="margin-bottom:10px">'+list+'</div>':'<div class="hint" style="margin-bottom:10px">Belum ada horizon.</div>')+
+    '<div class="card" style="background:var(--krem);margin:0">'+
+    '<div class="grid g4">'+
+      inField("__hz_from","Dari (cm)",d.depthFrom,"number")+
+      inField("__hz_to","Sampai (cm)",d.depthTo,"number")+
+      inField("__hz_name","Horizon",d.horizonName,"text","A/E/Bt")+
+      inField("__hz_suf","Sufiks",d.horizonSuffix,"text","1,2,g")+
+    '</div>'+
+    '<label class="lbl" style="margin-top:10px;color:var(--hijau)">Warna Matrik (Hue / Value / Chroma)</label>'+
+    '<div class="grid g3">'+
+      combo("__hz_hue","Hue","hue",d.warnaMatrik_Hue)+
+      combo("__hz_val","Value","value",d.warnaMatrik_Value)+
+      combo("__hz_chr","Chroma","chroma",d.warnaMatrik_Chroma)+
+    '</div>'+
+    '<label class="lbl" style="margin-top:10px;color:var(--hijau)">Warna Karatan (Hue / Value / Chroma)</label>'+
+    '<div class="grid g3">'+
+      combo("__hz_khue","Hue","hue",d.warnaKaratan_Hue)+
+      combo("__hz_kval","Value","value",d.warnaKaratan_Value)+
+      combo("__hz_kchr","Chroma","chroma",d.warnaKaratan_Chroma)+
+    '</div>'+
+    '<label class="lbl" style="margin-top:10px;color:var(--hijau)">Warna Campuran (Hue / Value / Chroma)</label>'+
+    '<div class="grid g3">'+
+      combo("__hz_chue","Hue","hue",d.warnaCampuran_Hue)+
+      combo("__hz_cval","Value","value",d.warnaCampuran_Value)+
+      combo("__hz_cchr","Chroma","chroma",d.warnaCampuran_Chroma)+
+    '</div>'+
+    '<div class="grid g2" style="margin-top:10px">'+
+      combo("__hz_tex","Tekstur","tekstur",d.texture)+
+      combo("__hz_con","Konsistensi","konsistensi",d.consistency)+
+      inField("__hz_gravel","Gravel (%)",d.gravelPercent,"number")+
+      inField("__hz_ph","pH H₂O",d.pH_H2O,"number")+
+      inField("__hz_ph2","pH H₂O₂",d.pH_H2O2,"number")+
+      inField("__hz_phcl","pH HCl",d.pH_HCL,"number")+
+      inField("__hz_ec","EC",d.ec,"number")+
+      inField("__hz_tds","TDS",d.tds,"number")+
+    '</div>'+
+    inField("__hz_ket","Keterangan",d.keterangan)+
+    '<button class="btn btn-s btn-full" style="margin-top:10px" onclick="addHz()">+ Tambah Horizon</button>'+
+    '</div>';
+}
+// binding field horizon draft (nama khusus __hz_*)
+function setField(f,v){ // override untuk tangani draft horizon
+  if(f.indexOf("__hz_")===0){
+    var map={__hz_from:"depthFrom",__hz_to:"depthTo",__hz_name:"horizonName",__hz_suf:"horizonSuffix",
+      __hz_hue:"warnaMatrik_Hue",__hz_val:"warnaMatrik_Value",__hz_chr:"warnaMatrik_Chroma",
+      __hz_khue:"warnaKaratan_Hue",__hz_kval:"warnaKaratan_Value",__hz_kchr:"warnaKaratan_Chroma",
+      __hz_chue:"warnaCampuran_Hue",__hz_cval:"warnaCampuran_Value",__hz_cchr:"warnaCampuran_Chroma",
+      __hz_tex:"texture",__hz_con:"consistency",__hz_gravel:"gravelPercent",
+      __hz_ph:"pH_H2O",__hz_ph2:"pH_H2O2",__hz_phcl:"pH_HCL",__hz_ec:"ec",__hz_tds:"tds",__hz_ket:"keterangan"};
+    var k=map[f]; if(k){ S.hzDraft[k]=(k==="depthFrom"||k==="depthTo")?num(v):v; }
+    return;
+  }
+  S.form[f]=v;
+}
+function addHz(){
+  var d=S.hzDraft;
+  if(!d.horizonName){toast("Isi simbol horizon.","err");return;}
+  S.horizons.push(Object.assign({},d));
+  S.hzDraft=emptyHz(); S.hzDraft.depthFrom=num(d.depthTo);
+  var m=$("#main");if(m)m.innerHTML=viewForm();
+}
+function delHz(i){var srt=S.horizons.slice().sort(function(a,b){return a.depthFrom-b.depthFrom;});var t=srt[i];S.horizons=S.horizons.filter(function(x){return x!==t;});var m=$("#main");if(m)m.innerHTML=viewForm();}
+
+function ambilGPS(){
+  if(!navigator.geolocation){toast("Perangkat tidak mendukung GPS.","err");return;}
+  toast("Mengambil GPS…","info");
+  navigator.geolocation.getCurrentPosition(function(p){
+    S.form.latitude=+p.coords.latitude.toFixed(6);S.form.longitude=+p.coords.longitude.toFixed(6);
+    if(p.coords.altitude!=null)S.form.altitude=Math.round(p.coords.altitude);
+    S.form.gps=S.form.latitude+", "+S.form.longitude;
+    var m=$("#main");if(m)m.innerHTML=viewForm();
+    toast("📍 Terkunci (±"+Math.round(p.coords.accuracy)+" m).","ok");
+  },function(e){toast("Gagal GPS: "+e.message,"err");},{enableHighAccuracy:true,timeout:15000});
+}
+</script>
+
+<script>
+/* ===== SIMPAN RECORD ===== */
+function saveRecord(){
+  var f=S.form;
+  if(!String(f.borId).trim()){toast("Bor ID wajib diisi.","err");return;}
+  if(!S.ss){toast("Spreadsheet belum terhubung. Buka tab Sync.","err");return;}
+  var btn=$("#btnSave"); if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span> Menyimpan…';}
+  // Jika draft horizon terisi tapi lupa ditekan "Tambah", ikutkan otomatis.
+  if(S.hzDraft&&(S.hzDraft.horizonName||S.hzDraft.depthTo)){
+    var dup=S.horizons.some(function(h){return h.horizonName===S.hzDraft.horizonName&&num(h.depthFrom)===num(S.hzDraft.depthFrom)&&num(h.depthTo)===num(S.hzDraft.depthTo);});
+    if(!dup&&S.hzDraft.horizonName){S.horizons.push(Object.assign({},S.hzDraft));}
+  }
+  // rakit warnaMatrik gabungan (Hue Value/Chroma) untuk tiap horizon
+  function munsell(hue,val,chr){var vc=(val||chr)?((val||"")+"/"+(chr||"")):"";return [hue,vc].filter(Boolean).join(" ");}
+  var horizons=S.horizons.map(function(h){
+    return {
+      depthFrom:num(h.depthFrom),depthTo:num(h.depthTo),horizonName:h.horizonName||"",horizonSuffix:h.horizonSuffix||"",
+      warnaMatrik:munsell(h.warnaMatrik_Hue,h.warnaMatrik_Value,h.warnaMatrik_Chroma),
+      warnaMatrik_Hue:h.warnaMatrik_Hue||"",warnaMatrik_Value:h.warnaMatrik_Value||"",warnaMatrik_Chroma:h.warnaMatrik_Chroma||"",
+      warnaKaratan:munsell(h.warnaKaratan_Hue,h.warnaKaratan_Value,h.warnaKaratan_Chroma),
+      warnaKaratan_Hue:h.warnaKaratan_Hue||"",warnaKaratan_Value:h.warnaKaratan_Value||"",warnaKaratan_Chroma:h.warnaKaratan_Chroma||"",
+      warnaCampuran:munsell(h.warnaCampuran_Hue,h.warnaCampuran_Value,h.warnaCampuran_Chroma),
+      warnaCampuran_Hue:h.warnaCampuran_Hue||"",warnaCampuran_Value:h.warnaCampuran_Value||"",warnaCampuran_Chroma:h.warnaCampuran_Chroma||"",
+      texture:h.texture||"",consistency:h.consistency||"",
+      gravelPercent:h.gravelPercent||"",pH_H2O:h.pH_H2O||"",pH_H2O2:h.pH_H2O2||"",pH_HCL:h.pH_HCL||"",ec:h.ec||"",tds:h.tds||"",keterangan:h.keterangan||""
+    };
+  });
+  if(!S.editingId){ f.surveyDate=new Date().toISOString().slice(0,10); } // kunci real-time utk record baru
+  var id=S.editingId||("bor-"+Date.now());
+  var fotos=(f.fotos||[]).slice();
+  var offline=!navigator.onLine;
+
+  function finishLocal(rec,tersinkron){
+    if(S.editingId){S.records=S.records.map(function(r){return r.id===id?rec:r;});}
+    else{ if(!S.records.some(function(r){return r.id===id;}))S.records.unshift(rec); else S.records=S.records.map(function(r){return r.id===id?rec:r;}); }
+    saveLocal();
+    S.editingId=null;S.form=emptyForm();S.horizons=[];S.hzDraft=emptyHz();S.step=1;
+    toast(tersinkron?("✅ Record "+rec.borId+" tersimpan & tersinkron."):("💾 Record "+rec.borId+" tersimpan LOKAL (offline). Akan otomatis sinkron saat online."), tersinkron?"ok":"info");
+    S.tab="db";render();
+  }
+
+  // OFFLINE: simpan lokal langsung (foto tetap base64), tandai pending
+  if(offline){
+    var rec=Object.assign({},f,{id:id,horizons:horizons,fotos:fotos,foto:JSON.stringify(fotos),syncStatus:"local",_pendingPhotos:fotos.some(function(d){return /^data:/.test(d);})});
+    finishLocal(rec,false);
+    return;
+  }
+
+  // ONLINE: upload foto → simpan ke sheet
+  var needUpload=fotos.some(function(d){return /^data:/.test(d);});
+  var prep=needUpload?call("savePhotos",S.ss,fotos).then(function(r){return (r&&r.urls)||fotos;}).catch(function(){return fotos;}):Promise.resolve(fotos);
+  prep.then(function(urls){
+  var rec=Object.assign({},f,{id:id,horizons:horizons,fotos:urls,foto:JSON.stringify(urls),syncStatus:"local"});
+  var existing=S.records.filter(function(r){return r.id===id;})[0];
+  var rowIndex=existing?existing.googleSheetRowIndex:null;
+  var op=S.editingId&&rowIndex?call("updateSurveyInSheet",S.ss,rec,rowIndex):call("appendSurveyToSheet",S.ss,rec);
+  op.then(function(res){
+    return call("resyncAllHorizons",S.ss).catch(function(){}).then(function(){return res;});
+  }).then(function(res){
+    rec.syncStatus="synced";rec._pendingPhotos=false;
+    if(!S.editingId&&typeof res==="number"&&res>0)rec.googleSheetRowIndex=res;
+    finishLocal(rec,true);
+  }).catch(function(e){
+    if(isOffline(e)){ // koneksi putus di tengah → simpan lokal
+      var recL=Object.assign({},f,{id:id,horizons:horizons,fotos:fotos,foto:JSON.stringify(fotos),syncStatus:"local",_pendingPhotos:needUpload});
+      finishLocal(recL,false);return;
+    }
+    if(btn){btn.disabled=false;btn.innerHTML="💾 "+(S.editingId?"Update Record":"Simpan Record");}
+    toast("Gagal simpan: "+e.message,"err");
+  });
+  }); // tutup prep.then
+}
+function editRecord(id){
+  var r=S.records.filter(function(x){return x.id===id;})[0];if(!r)return;
+  S.editingId=id;
+  S.form=Object.assign(emptyForm(),r);delete S.form.horizons;
+  S.form.fotos=parseFotos(r);
+  S.horizons=(r.horizons||[]).map(function(h){
+    var o=Object.assign(emptyHz(),h);
+    function split(str,pfx){var m=String(str||"").match(/^(\S+)\s+(\S+?)\/(\S+)/);if(m){o[pfx+"_Hue"]=o[pfx+"_Hue"]||m[1];o[pfx+"_Value"]=o[pfx+"_Value"]||m[2];o[pfx+"_Chroma"]=o[pfx+"_Chroma"]||m[3];}}
+    if(!o.warnaMatrik_Hue)split(h.warnaMatrik,"warnaMatrik");
+    if(!o.warnaKaratan_Hue)split(h.warnaKaratan,"warnaKaratan");
+    if(!o.warnaCampuran_Hue)split(h.warnaCampuran,"warnaCampuran");
+    return o;
+  });
+  S.step=1;S.tab="form";render();
+}
+function delRecord(id){
+  var r=S.records.filter(function(x){return x.id===id;})[0];if(!r)return;
+  if(!confirm("Hapus record "+r.borId+"?"))return;
+  call("deleteSurveyFromSheet",S.ss,r).catch(function(){}).then(function(){
+    S.records=S.records.filter(function(x){return x.id!==id;});saveLocal();
+    if(S.selId===id)S.selId=null;
+    toast("Record dihapus.","ok");render();
+  });
+}
+
+/* ===== TAB: DATABASE ===== */
+function viewDb(){
+  var canEdit=!S.session||S.session.role==="admin"||S.session.role==="editor";
+  var q=(S._q||"").toLowerCase();
+  var fy=S._fy||"",fpt=S._fpt||"";
+  var years={},pts={};
+  S.records.forEach(function(r){var y=(r.surveyDate||"").slice(0,4);if(y)years[y]=1;if(r.perusahaan)pts[r.perusahaan]=1;});
+  var list=S.records.filter(function(r){
+    if(fy&&(r.surveyDate||"").slice(0,4)!==fy)return false;
+    if(fpt&&r.perusahaan!==fpt)return false;
+    return !q||[r.borId,r.perusahaan,r.kebun,r.jenisTanah,r.surveyorName].some(function(v){return String(v||"").toLowerCase().indexOf(q)>=0;});
+  });
+  if(!S.sel)S.sel={};
+  var selCount=Object.keys(S.sel).filter(function(k){return S.sel[k];}).length;
+  var cards=list.map(function(r){
+    var sel=S.selId===r.id;var chk=!!S.sel[r.id];
+    return '<div class="rec'+(sel?" sel":"")+'">'+
+      '<div class="row" style="justify-content:space-between">'+
+        '<label class="row" style="gap:6px;cursor:pointer"><input type="checkbox" '+(chk?"checked":"")+' onclick="event.stopPropagation();S.sel[\''+r.id+'\']=this.checked;var m=$(\'#main\');if(m)m.innerHTML=viewDb()"/>'+
+        '<span class="id" onclick="S.selId=\''+r.id+'\';var m=$(\'#main\');if(m)m.innerHTML=viewDb()">'+esc(r.borId)+'</span></label>'+
+        '<span style="font-size:10px;font-weight:800;padding:2px 6px;border-radius:6px;background:'+(r.syncStatus==="synced"?"#d1fae5;color:#065f46":"#fef3c7;color:#92400e")+'">'+(r.syncStatus==="synced"?"SYNCED":"LOKAL")+'</span>'+
+      '</div>'+
+      '<div style="font-size:11px;color:#55554E;margin-top:2px" onclick="S.selId=\''+r.id+'\';var m=$(\'#main\');if(m)m.innerHTML=viewDb()">'+esc(r.perusahaan||"-")+' · '+esc(r.kebun||"-")+' · '+esc(r.jenisTanah||"-")+' · '+esc(r.surveyDate||"")+' · '+((r.horizons||[]).length)+' horizon</div>'+
+      (sel?('<div class="chipbar">'+
+        '<span class="chip" onclick="event.stopPropagation();printBor(\''+r.id+'\',\'landscape\')">🖨️ PDF Landscape</span>'+
+        '<span class="chip" onclick="event.stopPropagation();printBor(\''+r.id+'\',\'portrait\')">A4 Potret</span>'+
+        (canEdit?'<span class="chip" onclick="event.stopPropagation();editRecord(\''+r.id+'\')">✏️ Edit</span>':'')+
+        (canEdit?'<span class="chip" style="color:#dc2626;border-color:#fecaca" onclick="event.stopPropagation();delRecord(\''+r.id+'\')">🗑️ Hapus</span>':'')+
+      '</div>'):'')+
+    '</div>';
+  }).join("");
+  var yOpts='<option value="">Semua Tahun</option>'+Object.keys(years).sort().reverse().map(function(y){return '<option value="'+y+'"'+(y===fy?" selected":"")+'>'+y+'</option>';}).join("");
+  var pOpts='<option value="">Semua Perusahaan</option>'+Object.keys(pts).sort().map(function(x){return '<option value="'+esca(x)+'"'+(x===fpt?" selected":"")+'>'+esc(x)+'</option>';}).join("");
+  return '<div class="card">'+
+    '<h3>🗂️ Database Bor & Hasil Analisis</h3><div class="sub">Daftar seluruh titik bor yang telah direkam.</div>'+
+    '<input class="in" placeholder="Cari berdasarkan ID, jenis tanah, PT…" value="'+esca(S._q||"")+'" oninput="S._q=this.value;var m=$(\'#main\');if(m)m.innerHTML=viewDb()" style="margin-bottom:10px"/>'+
+    '<div class="grid g2">'+
+      '<div><label class="lbl">Tahun Survei</label><select class="in" onchange="S._fy=this.value;var m=$(\'#main\');if(m)m.innerHTML=viewDb()">'+yOpts+'</select></div>'+
+      '<div><label class="lbl">Perusahaan / PT</label><select class="in" onchange="S._fpt=this.value;var m=$(\'#main\');if(m)m.innerHTML=viewDb()">'+pOpts+'</select></div>'+
+    '</div>'+
+    /* Rekap bulanan */
+    '<div class="card" style="background:var(--krem);margin:12px 0 0"><label class="lbl">📅 Rekapitulasi Bulanan Eksekutif</label>'+
+      '<div class="hint" style="margin:2px 0 8px">Unduh/cetak ringkasan bulanan (CSV atau PDF).</div>'+
+      '<div class="row"><input class="in" type="month" id="recapMonth" value="'+(new Date().toISOString().slice(0,7))+'" style="flex:1"/>'+
+        '<button class="btn btn-s" onclick="recapCSV()">⬇ CSV</button>'+
+        '<button class="btn btn-p" onclick="recapPDF()">📄 PDF Ringkasan</button></div>'+
+    '</div>'+
+    /* Cetak gabungan */
+    '<div class="card" style="background:var(--krem);margin:10px 0 0"><div class="row" style="justify-content:space-between"><label class="lbl">✅ Cetak Gabungan ('+selCount+' terpilih)</label>'+
+      '<span><a href="#" onclick="list_selectAll(true);return false" style="font-size:11px;font-weight:700">Pilih Semua</a> · <a href="#" onclick="list_selectAll(false);return false" style="font-size:11px;font-weight:700">Batal</a></span></div>'+
+      '<div class="hint" style="margin:2px 0 8px">Centang beberapa ID Bor untuk dikompilasi jadi satu dokumen PDF.</div>'+
+      '<div class="row"><label class="lbl" style="margin:0">Orientasi:</label><select class="in" id="combOri" style="flex:1"><option value="portrait">A4 Portrait</option><option value="landscape">A4 Landscape</option></select></div>'+
+      '<button class="btn btn-p btn-full" style="margin-top:8px" '+(selCount?"":"disabled")+' onclick="printGabungan()">📄 Cetak '+selCount+' Laporan Gabungan (PDF)</button>'+
+    '</div>'+
+    '<div class="sep"></div>'+
+    '<button class="btn btn-s btn-full" style="margin-bottom:10px" onclick="loadRecords()">🔄 Muat ulang dari Sheet</button>'+
+    (cards||'<div class="hint">Belum ada record sesuai filter.</div>')+
+  '</div>';
+}
+function list_selectAll(v){if(!S.sel)S.sel={};S.records.forEach(function(r){S.sel[r.id]=v;});var m=$("#main");if(m)m.innerHTML=viewDb();}
+
+/* ===== TAB: SYNC ===== */
+function viewSync(){
+  var connected=!!S.ss;
+  var isAdm=isAdmin();
+  var userMgmt="";
+  if(isAdm){
+    var ulist=(S.users||[]).map(function(u){
+      var badge=u.role==="admin"?'<span class="badge b-adm" style="font-size:9px">ADMIN</span>':u.role==="editor"?'<span class="badge b-edt" style="font-size:9px">EDITOR</span>':'<span class="badge b-vwr" style="font-size:9px">VIEWER</span>';
+      var judul=u.username?('@'+esc(u.username)):esc(u.email);
+      var perluSetup=!u.username;
+      return '<div class="rec" style="margin-bottom:6px"><div class="row" style="justify-content:space-between"><div><b style="font-size:12px">'+judul+'</b> '+badge+(perluSetup?' <span style="font-size:9px;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:5px">perlu username</span>':'')+'<div style="font-size:10px;color:#6B6B5F">'+esc(u.nama||"")+' · '+(u.allowedPt?esc(u.allowedPt):"semua PT")+(u.noHp?' \u00b7 \ud83d\udcf1 '+esc(u.noHp):"")+(perluSetup?' \u00b7 '+esc(u.email):"")+'</div></div>'+
+        '<div><a href="#" onclick="editUser(\''+esca(u.email)+'\');return false" style="font-size:11px;font-weight:700">Edit</a> <a href="#" onclick="delUser(\''+esca(u.email)+'\');return false" style="color:#dc2626;font-size:11px;font-weight:700">🗑</a></div></div></div>';
+    }).join("");
+    userMgmt='<div class="card"><div class="row" style="justify-content:space-between"><h3>🛡️ Manajemen Pengguna (Admin)</h3><a href="#" onclick="loadUsers();return false" style="font-size:11px;font-weight:700">🔄 Muat ulang</a></div>'+
+      '<input class="in" id="uNama" placeholder="Nama lengkap"/>'+
+      '<div class="grid g2" style="margin-top:8px"><input class="in" id="uUser" placeholder="username (untuk login)" autocapitalize="off" autocorrect="off"/><input class="in" id="uPass" type="text" placeholder="password"/></div>'+
+      '<div class="grid g2" style="margin-top:8px"><select class="in" id="uRole"><option value="viewer">viewer — hanya baca</option><option value="editor">editor — baca & tulis</option><option value="admin">admin — akses penuh</option></select>'+
+      '<input class="in" id="uHp" placeholder="No. WhatsApp (opsional)" inputmode="tel"/></div>'+
+      '<div class="grid g2" style="margin-top:8px"><input class="in" id="uPt" placeholder="Batasi PT (kosong=semua)"/>'+
+      '<label class="row" style="gap:6px;font-size:12px;cursor:pointer;align-items:center"><input type="checkbox" id="uAktif" checked style="width:auto"/> Akun aktif</label></div>'+
+      '<div class="hint" style="margin-top:6px">Cukup isi <b>nama, username, password</b>. Saat mengedit, kosongkan password bila tak ingin mengubahnya.</div>'+
+      '<input type="hidden" id="uEmailEdit"/>'+
+      '<button class="btn btn-p btn-full" style="margin-top:10px" onclick="saveUser()">👤 Simpan Pengguna</button>'+
+      (ulist?'<div class="sep">'+ulist+'</div>':'<div class="hint" style="margin-top:8px">Belum ada daftar pengguna dimuat.</div>')+
+      '<div class="sep" style="text-align:center"><a href="#" onclick="showLog();return false" style="font-size:11px;font-weight:700">📋 Tampilkan Log Aktivitas</a><div id="logOut"></div></div>'+
+    '</div>';
+  }
+  return userMgmt+
+  '<div class="card">'+
+    '<h3>☁️ Penyimpanan & Google Workspace</h3><div class="sub">Hubungkan database ke Google Drive & Sheets.</div>'+
+    '<label class="lbl">1. Cloud Database (Google Sheets)</label>'+
+    (connected?
+      '<div style="font-family:monospace;font-size:10px;background:var(--krem);border:1px solid var(--garis);border-radius:8px;padding:8px;word-break:break-all;margin:4px 0">Spreadsheet ID: '+esc(S.ss)+'</div>'+
+      '<div class="row"><button class="btn btn-s" style="flex:1" onclick="window.open(\'https://docs.google.com/spreadsheets/d/'+esc(S.ss)+'/edit\',\'_blank\')">↗ Buka Sheets</button>'+
+        '<button class="btn btn-p" style="flex:1" onclick="loadRecords();loadProfils()">🔄 Sinkron Cloud</button></div>'+
+      '<button class="btn btn-s btn-full" style="margin-top:8px" onclick="resyncHz()">≡ Sinkron Ulang Semua Horizon</button>'+
+      '<button class="btn btn-s btn-full" style="margin-top:8px;border-style:dashed;color:#A65D37" onclick="createSheet()">+ Buat Spreadsheet Baru</button>'
+      :
+      '<button class="btn btn-p btn-full" style="margin-top:4px" onclick="createSheet()">➕ Buat Spreadsheet Baru</button>'+
+      '<div class="sep"><label class="lbl">Atau tempel ID / URL spreadsheet</label><div class="row"><input class="in" id="mansheet" placeholder="https://docs.google.com/…/edit"/><button class="btn btn-p" onclick="connectSheet()">Hubungkan</button></div></div>'
+    )+
+  '</div>'+
+  (connected?'<div class="card"><label class="lbl">2. Folder Backup GIS (Google Drive)</label>'+
+    (S.driveFolder?'<div class="msg ok" style="display:block">Folder aktif: '+esc(S.driveFolder.name||S.driveFolder.id)+'</div><button class="btn btn-s btn-full" onclick="window.open(\'https://drive.google.com/drive/folders/'+esc(S.driveFolder.id)+'\',\'_blank\')">↗ Buka Folder Drive</button>':'<button class="btn btn-s btn-full" style="margin-top:4px" onclick="makeDrive()">+ Buat Folder Sync di Google Drive</button>')+
+  '</div>':'')+
+  (connected?qfieldSection():'')+
+  (S.session?('<div class="card"><h3>👤 Sesi</h3><div style="font-size:12px">'+esc(S.session.name||"-")+(S.session.email?' · '+esc(S.session.email):'')+'</div><div style="font-size:11px;color:#6B6B5F;margin-top:2px">Peran: <b>'+String(S.session.role||"-").toUpperCase()+'</b></div></div>'):'');
+}
+
+function qfieldSection(){
+  return '<div class="card"><div class="row" style="justify-content:space-between"><h3>⬆️ QField Offline Sync (Impor Data GIS)</h3></div>'+
+    '<div class="sub">Impor titik bor dari GeoJSON hasil QField. Horizon digabung otomatis via bor_id.</div>'+
+    '<div class="grid g3">'+
+      '<div><label class="lbl">Titik Bor GeoJSON *</label><label class="btn btn-s btn-full" style="flex-direction:column;padding:14px 6px"><span style="font-size:20px">📄</span><span style="font-size:10px" id="qfBorName">Pilih File GeoJSON</span><input type="file" accept=".geojson,.json" style="display:none" onchange="qfPick(this,\'bor\')"/></label></div>'+
+      '<div><label class="lbl">Horizon GeoJSON (opsional)</label><label class="btn btn-s btn-full" style="flex-direction:column;padding:14px 6px"><span style="font-size:20px">📑</span><span style="font-size:10px" id="qfHzName">Pilih File Horizon</span><input type="file" accept=".geojson,.json" style="display:none" onchange="qfPick(this,\'hz\')"/></label></div>'+
+      '<div><label class="lbl">Foto Lapangan (opsional)</label><label class="btn btn-s btn-full" style="flex-direction:column;padding:14px 6px"><span style="font-size:20px">📷</span><span style="font-size:10px" id="qfFotoName">Pilih Foto</span><input type="file" accept="image/*" multiple style="display:none" onchange="qfPick(this,\'foto\')"/></label></div>'+
+    '</div>'+
+    '<div style="margin-top:8px"><label class="lbl">Profil Tanah GeoJSON (opsional)</label><label class="btn btn-s btn-full" style="flex-direction:column;padding:12px 6px"><span style="font-size:18px">🧱</span><span style="font-size:10px" id="qfProfilName">Pilih File Profil GeoJSON</span><input type="file" accept=".geojson,.json" style="display:none" onchange="qfPick(this,\'profil\')"/></label></div>'+
+    '<button class="btn btn-p btn-full" style="margin-top:10px" id="qfBtn" onclick="qfProcess()" '+(S._qfBor?"":"disabled")+'>⬆ Proses Impor & Validasi</button>'+
+    '<div id="qfOut" class="hint" style="margin-top:6px"></div>'+
+  '</div>';
+}
+
+function createSheet(){
+  toast("Membuat spreadsheet…","info");
+  call("createSoilSurveySpreadsheet","Database Titik Bor").then(function(r){
+    S.ss=r.id;return call("setActiveWorkspace",{spreadsheetId:r.id,spreadsheetUrl:r.url}).catch(function(){});
+  }).then(function(){saveLocal();toast("✅ Spreadsheet dibuat & terhubung.","ok");render();})
+  .catch(function(e){toast("Gagal: "+e.message,"err");});
+}
+function connectSheet(){
+  var raw=($("#mansheet").value||"").trim();if(!raw){toast("Tempel ID/URL.","err");return;}
+  var m=raw.match(/\/d\/([a-zA-Z0-9-_]+)/);var id=m?m[1]:raw;
+  var url=m?raw:"https://docs.google.com/spreadsheets/d/"+id+"/edit";
+  S.ss=id;
+  call("setActiveWorkspace",{spreadsheetId:id,spreadsheetUrl:url}).then(function(){
+    return call("getSessionInfo",id);
+  }).then(function(sess){S.session=sess;saveLocal();toast("✅ Terhubung.","ok");loadRecords();})
+  .catch(function(e){toast("Gagal: "+e.message,"err");});
+}
+
+/* ===== LOAD ===== */
+function loadRecords(){
+  if(!S.ss){toast("Hubungkan spreadsheet dulu.","err");return;}
+  toast("Memuat data…","info");
+  call("fetchSurveysFromSheet",S.ss).then(function(list){
+    S.records=(list||[]).map(function(r){
+      (r.horizons||[]).forEach(function(h){
+        function sp(str,pfx){var m=String(str||"").match(/^(\S+)\s+(\S+?)\/(\S+)/);if(m){h[pfx+"_Hue"]=h[pfx+"_Hue"]||m[1];h[pfx+"_Value"]=h[pfx+"_Value"]||m[2];h[pfx+"_Chroma"]=h[pfx+"_Chroma"]||m[3];}}
+        if(!h.warnaMatrik_Hue)sp(h.warnaMatrik,"warnaMatrik");
+        if(!h.warnaKaratan_Hue)sp(h.warnaKaratan,"warnaKaratan");
+        if(!h.warnaCampuran_Hue)sp(h.warnaCampuran,"warnaCampuran");
+      });
+      r.fotos=parseFotos(r);
+      return r;
+    });
+    saveLocal();toast("✅ "+S.records.length+" record dimuat.","ok");render();
+  }).catch(function(e){toast("Gagal muat: "+e.message,"err");});
+}
+function saveLocal(){try{localStorage.setItem("ss_records",JSON.stringify(S.records));localStorage.setItem("ss_ss",S.ss);}catch(e){}}
+function loadLocal(){try{S.records=JSON.parse(localStorage.getItem("ss_records")||"[]");S.ss=localStorage.getItem("ss_ss")||"";}catch(e){}}
+</script>
+
+<script>
+/* ===== PDF LAPORAN TITIK BOR ===== */
+function borReportCSS(){return 'h1{text-align:center;font-size:15px;margin:0 0 2px;letter-spacing:.5px}'+
+  '.sub{text-align:center;font-size:9px;color:#555;border-bottom:2px solid #1b4d3e;padding-bottom:6px;margin-bottom:12px}'+
+  'table.info{border-collapse:collapse;width:100%}table.info td{padding:1.5px 4px;font-size:11px;vertical-align:top}table.info td.k{width:170px;font-weight:600}'+
+  '.two{display:flex;gap:20px}.two>div{flex:1}.sect{font-weight:800;font-size:11px;text-transform:uppercase;border-left:3px solid #1b4d3e;padding-left:6px;margin:12px 0 5px}'+
+  'table.hz{border-collapse:collapse;width:100%;margin-top:4px}table.hz th{border:1px solid #333;background:#e8efe9;font-size:8.5px;padding:4px 3px}table.hz td{border:1px solid #555;font-size:8.5px;padding:3px 3px}'+
+  '.sign{margin-top:26px;display:flex;justify-content:flex-end;text-align:center}.sign .box{min-width:200px}.sign-name{margin-top:52px;font-weight:700;text-decoration:underline}.sign-role{font-size:9px;color:#555}'+
+  '.pgbreak{page-break-before:always}';}
+function borReportHTML(r,newPage){
+  var hz=(r.horizons||[]).slice().sort(function(a,b){return a.depthFrom-b.depthFrom;});
+  function mun(h,pfx){return h[pfx]||[h[pfx+"_Hue"],(h[pfx+"_Value"]||h[pfx+"_Chroma"])?((h[pfx+"_Value"]||"")+"/"+(h[pfx+"_Chroma"]||"")):""].filter(Boolean).join(" ");}
+  var hzRows=hz.map(function(h){return '<tr><td style="text-align:center">'+esc((h.horizonName||"")+(h.horizonSuffix||""))+'</td><td style="text-align:center;white-space:nowrap">'+fmtDepth(h.depthFrom,h.depthTo)+'</td><td>'+esc(mun(h,"warnaMatrik")||"-")+'</td><td>'+esc(mun(h,"warnaKaratan")||"-")+'</td><td>'+esc(mun(h,"warnaCampuran")||"-")+'</td><td>'+esc(h.texture||"-")+'</td><td>'+esc(h.consistency||"-")+'</td><td style="text-align:center">'+esc(h.gravelPercent||"-")+'</td><td style="text-align:center">'+esc(h.pH_H2O||"-")+'</td><td style="text-align:center">'+esc(h.pH_H2O2||"-")+'</td><td style="text-align:center">'+esc(h.pH_HCL||"-")+'</td><td style="text-align:center">'+esc(h.ec||"-")+'</td><td style="text-align:center">'+esc(h.tds||"-")+'</td><td>'+esc(h.keterangan||"")+'</td></tr>';}).join("");
+  function baris(l,v){return '<tr><td class="k">'+l+'</td><td>:</td><td class="v">'+esc(v||"-")+'</td></tr>';}
+  var _fotos=parseFotos(r);
+  var foto=_fotos.length?('<div class="sect">Dokumentasi Foto</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;align-items:flex-start">'+_fotos.map(function(u){return '<img src="'+esca(u)+'" style="width:'+(_fotos.length>2?"31%":_fotos.length>1?"46%":"60%")+';max-height:340px;object-fit:contain;border:1px solid #999;border-radius:6px" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'"/>';}).join("")+'</div>'):"";
+  return (newPage?'<div class="pgbreak"></div>':'')+
+    '<h1>LAPORAN DESKRIPSI TITIK BOR</h1><div class="sub">DATABASE SOIL SURVEY & GIS · '+esc(r.perusahaan||"")+'</div>'+
+    '<div class="two"><div><table class="info">'+baris("Bor ID",r.borId)+baris("No. Bor",r.noBor)+baris("Perusahaan",r.perusahaan)+baris("Kebun/Estate",r.kebun)+baris("Rintis",r.rintis)+baris("Surveyor",r.surveyorName)+baris("Tanggal",r.surveyDate)+baris("Koordinat",(r.latitude&&r.longitude)?(r.latitude+", "+r.longitude):"-")+baris("Altitude",r.altitude?r.altitude+" m dpl":"-")+'</table></div>'+
+    '<div><table class="info">'+baris("Fisiografi",r.fisiografi)+baris("Topografi",r.topografi)+baris("Lereng Maks",r.lerengMaks)+baris("Bahan Induk",r.bahanInduk)+baris("Vegetasi",r.vegetasi)+baris("Kedalaman Efektif",r.kedalamanEfektif)+baris("Air Tanah",r.airTanah)+baris("Drainase",r.drainase)+baris("Epipedon",r.epipedon)+baris("Bawah Permukaan",r.bawahPermukaan)+baris("Klasifikasi",r.klasifikasi)+baris("Jenis Tanah",r.jenisTanah)+'</table></div></div>'+
+    '<div class="sect">Sifat Tekstur & Kimia Topsoil / Subsoil</div>'+
+    '<table class="hz"><thead><tr><th>Parameter</th><th>Topsoil</th><th>Subsoil</th></tr></thead><tbody>'+
+      '<tr><td>Tekstur</td><td style="text-align:center">'+esc(r.teksturTopsoil||"-")+'</td><td style="text-align:center">'+esc(r.teksturSubsoil||"-")+'</td></tr>'+
+      '<tr><td>pH H₂O</td><td style="text-align:center">'+esc(r.pH_H2O_Topsoil||"-")+'</td><td style="text-align:center">'+esc(r.pH_H2O_Subsoil||"-")+'</td></tr>'+
+      '<tr><td>pH H₂O₂</td><td style="text-align:center">'+esc(r.pH_H2O2_Topsoil||"-")+'</td><td style="text-align:center">'+esc(r.pH_H2O2_Subsoil||"-")+'</td></tr>'+
+      '<tr><td>EC</td><td style="text-align:center">'+esc(r.ecTopsoil||"-")+'</td><td style="text-align:center">'+esc(r.ecSubsoil||"-")+'</td></tr>'+
+      '<tr><td>TDS</td><td style="text-align:center">'+esc(r.tdsTopsoil||"-")+'</td><td style="text-align:center">'+esc(r.tdsSubsoil||"-")+'</td></tr>'+
+    '</tbody></table>'+
+    '<div class="sect">Deskripsi Horizon</div>'+
+    '<table class="hz"><thead><tr><th>Horizon</th><th>Kedalaman<br/>(cm)</th><th>Warna<br/>Matrik</th><th>Warna<br/>Karatan</th><th>Warna<br/>Campuran</th><th>Tekstur</th><th>Konsistensi</th><th>Gravel<br/>%</th><th>pH<br/>H₂O</th><th>pH<br/>H₂O₂</th><th>pH<br/>HCl</th><th>EC</th><th>TDS</th><th>Keterangan</th></tr></thead><tbody>'+(hzRows||'<tr><td colspan="14" style="text-align:center;color:#888">Belum ada horizon</td></tr>')+'</tbody></table>'+
+    (r.notes?'<div style="margin-top:10px;font-size:10px"><b>Catatan:</b> '+esc(r.notes)+'</div>':"")+foto+
+    '<div class="sign"><div class="box">Surveyor Tanah,<div class="sign-name">'+esc(r.surveyorName||"________________")+'</div><div class="sign-role">Surveyor Lapangan</div></div></div>';
+}
+function printBor(id,paper){
+  var r=S.records.filter(function(x){return x.id===id;})[0];if(!r)return;
+  paper=paper||'landscape';
+  var html='<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"/><title>Laporan Bor '+esc(r.borId)+'</title>'+
+  '<style>@page{size:A4 '+paper+';margin:12mm}*{box-sizing:border-box}body{font-family:Inter,Arial,sans-serif;font-size:11px;color:#111;margin:0}'+borReportCSS()+'</style></head><body>'+
+  borReportHTML(r,false)+
+  '<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>';
+  var w=window.open("","_blank");if(!w){toast("Popup diblokir.","err");return;}w.document.write(html);w.document.close();
+}
+
+/* ===== TAB: PETA (custom layer + kolaborasi + fullscreen) ===== */
+var _map=null,_layers={},_baseLayers={},_collabTimer=null,_customLayer=null,_mbtiles=null;
+function viewMap(){
+  return '<div class="card" style="padding:0;overflow:hidden">'+
+    '<div class="row" style="justify-content:space-between;padding:12px 14px 8px"><h3 style="margin:0">🗺️ Peta Titik Bor</h3>'+
+      '<div class="row" style="gap:6px">'+
+        '<button class="chip" onclick="toggleGisPanel()">⚙️ Layer</button>'+
+        '<button class="chip" onclick="toggleFull()">⛶ Layar Penuh</button>'+
+      '</div>'+
+    '</div>'+
+    '<div id="gisPanel" style="display:none;padding:0 14px 10px">'+gisPanelHTML()+'</div>'+
+    '<div id="mapWrap" style="position:relative"><div id="map" style="height:420px;border-radius:0;border:none;border-top:1px solid var(--garis)"></div></div>'+
+  '</div>';
+}
+function gisPanelHTML(){
+  return '<div class="card" style="margin:0;background:var(--krem)">'+
+    '<label class="lbl">Tipe Basemap</label>'+
+    '<div class="row" style="gap:6px">'+
+      '<button class="btn '+((S.base||"street")==="street"?"btn-p":"btn-s")+'" style="flex:1;padding:8px" onclick="setBase(\'street\')">Street</button>'+
+      '<button class="btn '+(S.base==="sat"?"btn-p":"btn-s")+'" style="flex:1;padding:8px" onclick="setBase(\'sat\')">Satelit</button>'+
+      '<button class="btn '+(S.base==="topo"?"btn-p":"btn-s")+'" style="flex:1;padding:8px" onclick="setBase(\'topo\')">Topografi</button>'+
+    '</div>'+
+    '<div class="sep"><label class="lbl">Unggah Spasial (.geojson / .kml)</label>'+
+      '<label class="btn btn-s btn-full" style="border-style:dashed;flex-direction:column;padding:12px"><span style="font-size:20px">☁️</span><span style="font-size:11px" id="gisFileName">Klik / pilih file GeoJSON atau KML</span><input type="file" accept=".geojson,.json,.kml" style="display:none" onchange="loadCustomLayer(this)"/></label>'+
+      (_customLayer?'<button class="btn btn-d btn-full" style="margin-top:6px" onclick="clearCustomLayer()">Hapus Layer Kustom</button>':'')+
+    '</div>'+
+    '<div class="sep"><label class="lbl">Layer Data Peta (.mbtiles raster)</label>'+
+      '<label class="btn btn-s btn-full" style="border-style:dashed;flex-direction:column;padding:12px;color:#2563eb"><span style="font-size:20px">🗄️</span><span style="font-size:11px" id="mbtName">Unggah .mbtiles (peta offline raster)</span><input type="file" accept=".mbtiles" style="display:none" onchange="loadMbtiles(this)"/></label>'+
+      (_mbtiles?'<button class="btn btn-d btn-full" style="margin-top:6px" onclick="clearMbtiles()">Hapus Basemap Offline</button>':'')+
+      '<div class="hint">Peta raster offline (png/jpg/webp) hasil ekspor QGIS/Mobile Atlas. Berguna di lapangan tanpa sinyal.</div>'+
+    '</div>'+
+    '<div class="sep"><label class="lbl">Kolaborasi (Posisi Tim)</label>'+
+      '<label class="row" style="gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="showCollab" '+(S.showCollab?"checked":"")+' onchange="S.showCollab=this.checked;refreshCollabMap()" style="width:auto"/> Tampilkan posisi rekan surveyor di peta</label>'+
+      '<div class="hint">Avatar & foto rekan yang sedang berbagi posisi (dari fitur 👥) akan muncul di peta ini.</div>'+
+    '</div>'+
+  '</div>';
+}
+function toggleGisPanel(){var p=$("#gisPanel");if(p)p.style.display=p.style.display==="none"?"block":"none";}
+function toggleFull(){
+  var wrap=$("#mapWrap");if(!wrap)return;
+  if(!S._full){wrap.style.position="fixed";wrap.style.inset="0";wrap.style.zIndex="9998";wrap.style.background="#fff";
+    var mp=$("#map");mp.style.height="100vh";
+    var btn=document.createElement("button");btn.id="fullExit";btn.textContent="✕ Tutup Peta";btn.style.cssText="position:fixed;top:14px;right:14px;z-index:9999;background:#1b4d3e;color:#fff;border:none;border-radius:20px;padding:8px 16px;font-weight:800;cursor:pointer";btn.onclick=toggleFull;document.body.appendChild(btn);
+    S._full=true;
+  } else {
+    wrap.style.position="relative";wrap.style.inset="";wrap.style.zIndex="";var mp=$("#map");mp.style.height="420px";
+    var b=$("#fullExit");if(b)b.remove();S._full=false;
+  }
+  setTimeout(function(){if(_map)_map.invalidateSize();},150);
+}
+function baseTile(kind){
+  if(kind==="sat")return L.tileLayer("https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",{maxZoom:21,subdomains:["mt0","mt1","mt2","mt3"],attribution:"© Google"});
+  if(kind==="topo")return L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",{maxZoom:17,attribution:"© OpenTopoMap"});
+  return L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"});
+}
+function setBase(k){
+  S.base=k;
+  if(_map){if(_baseLayers.cur)_map.removeLayer(_baseLayers.cur);_baseLayers.cur=baseTile(k).addTo(_map);_baseLayers.cur.bringToBack();}
+  var p=$("#gisPanel");if(p)p.innerHTML=gisPanelHTML();
+}
+function initMap(){
+  if(!window.L)return;var el=$("#map");if(!el)return;
+  if(_map){_map.remove();_map=null;}
+  _map=L.map(el).setView([-2.5,118],5);
+  _baseLayers.cur=baseTile(S.base||"street").addTo(_map);
+  _layers.data=L.layerGroup().addTo(_map);
+  _layers.collab=L.layerGroup().addTo(_map);
+  drawDataMarkers();
+  if(S.showCollab)refreshCollabMap();
+  setTimeout(function(){_map.invalidateSize();},200);
+}
+function drawDataMarkers(){
+  if(!_layers.data)return;_layers.data.clearLayers();var b=[];
+  S.records.forEach(function(r){
+    if(!r.latitude||!r.longitude)return;
+    var icon=L.divIcon({className:"",html:'<div style="width:16px;height:16px;border-radius:50%;background:#1b4d3e;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>',iconSize:[16,16],iconAnchor:[8,8]});
+    var fotos=parseFotos(r);
+    var bimg=fotos.length?'<img src="'+esca(fotos[0])+'" style="width:100%;max-height:120px;object-fit:cover;border-radius:6px;margin-bottom:4px;cursor:zoom-in" onclick="lbOpen(this.src,\'Bor '+esca(r.borId)+'\')" referrerpolicy="no-referrer"/>':"";
+    L.marker([r.latitude,r.longitude],{icon:icon}).bindPopup('<div style="min-width:160px">'+bimg+'<b>'+esc(r.borId)+'</b><br/>'+esc(r.perusahaan||"")+'<br/>'+esc(r.jenisTanah||"")+'<br/>'+((r.horizons||[]).length)+' horizon'+(fotos.length?'<br/><button onclick="lbOpen(\''+esca(fotos[0])+'\',\'Bor '+esca(r.borId)+'\')" style="margin-top:5px;background:#1b4d3e;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">🔍 Perbesar Foto'+(fotos.length>1?" ("+fotos.length+")":"")+'</button>':'')+'</div>').addTo(_layers.data);
+    b.push([r.latitude,r.longitude]);
+  });
+  S.profils.forEach(function(r){
+    if(!r.latitude||!r.longitude)return;
+    var ic=L.divIcon({className:"",html:'<div style="width:18px;height:18px;background:#A65D37;border:2px solid #fff;border-radius:4px;color:#fff;font:bold 11px/14px sans-serif;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.4)">P</div>',iconSize:[18,18],iconAnchor:[9,9]});
+    var pf=r.foto&&/^data:|^https?:/.test(r.foto);
+    var foto=pf?'<img src="'+esca(r.foto)+'" style="width:100%;max-height:120px;object-fit:cover;border-radius:6px;margin-bottom:4px;cursor:zoom-in" onclick="lbOpen(this.src,\'Profil '+esca(r.pedonNo)+'\')" referrerpolicy="no-referrer"/>':"";
+    L.marker([r.latitude,r.longitude],{icon:ic}).bindPopup('<div style="min-width:160px">'+foto+'<b>PROFIL: '+esc(r.pedonNo)+'</b> ['+esc(r.simbol||"-")+']<br/>'+esc(r.klasUsda||"-")+'<br/>'+esc(r.lokasi||"")+(pf?'<br/><button onclick="lbOpen(\''+esca(r.foto)+'\',\'Profil '+esca(r.pedonNo)+'\')" style="margin-top:5px;background:#A65D37;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">🔍 Perbesar Foto</button>':'')+'</div>').addTo(_layers.data);
+    b.push([r.latitude,r.longitude]);
+  });
+  if(b.length){try{_map.fitBounds(b,{padding:[40,40],maxZoom:16});}catch(e){}}
+}
+function refreshCollabMap(){
+  if(!_map||!_layers.collab)return;_layers.collab.clearLayers();
+  if(!S.showCollab||!S.ss)return;
+  call("getLivePositions",S.ss).then(function(list){
+    (list||[]).forEach(function(ppl){
+      if(!ppl.lat||!ppl.lng)return;
+      var av=ppl.foto?'<img src="'+esca(ppl.foto)+'" style="width:34px;height:34px;border-radius:50%;border:2px solid #A3E635;object-fit:cover;box-shadow:0 2px 6px rgba(0,0,0,.4)"/>':'<div style="width:34px;height:34px;border-radius:50%;border:2px solid #A3E635;background:#425046;color:#fff;display:flex;align-items:center;justify-content:center;font:700 14px sans-serif">'+esc(String(ppl.nama||"?").charAt(0).toUpperCase())+'</div>';
+      var ic=L.divIcon({className:"",html:av,iconSize:[34,34],iconAnchor:[17,17],popupAnchor:[0,-18]});
+      if(ppl.akurasi)L.circle([ppl.lat,ppl.lng],{radius:ppl.akurasi,color:"#3b82f6",weight:1,fillOpacity:.08}).addTo(_layers.collab);
+      var pimg=ppl.foto?'<img src="'+esca(ppl.foto)+'" style="width:100%;max-height:120px;object-fit:cover;border-radius:6px;margin-bottom:4px;cursor:zoom-in" onclick="lbOpen(this.src,\''+esca(ppl.nama||"")+'\')"/>':"";
+      L.marker([ppl.lat,ppl.lng],{icon:ic}).bindPopup('<div style="min-width:150px">'+pimg+'<b>'+esc(ppl.nama||ppl.email)+'</b><br/>'+esc(ppl.email||"")+(ppl.akurasi?'<br/>±'+Math.round(ppl.akurasi)+' m':'')+(ppl.foto?'<br/><button onclick="lbOpen(\''+esca(ppl.foto)+'\',\''+esca(ppl.nama||"")+'\')" style="margin-top:5px;background:#425046;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">🔍 Perbesar Foto</button>':'')+'</div>').addTo(_layers.collab);
+    });
+  }).catch(function(){});
+}
+function loadCustomLayer(input){
+  var f=input.files&&input.files[0];if(!f)return;
+  var nm=$("#gisFileName");if(nm)nm.textContent=f.name;
+  var fr=new FileReader();
+  fr.onload=function(){
+    try{
+      if(_customLayer){_map.removeLayer(_customLayer);_customLayer=null;}
+      var lyr;
+      if(/\.kml$/i.test(f.name)){
+        var xml=new DOMParser().parseFromString(fr.result,"text/xml");
+        lyr=kmlToLayer(xml);
+      } else {
+        lyr=L.geoJSON(JSON.parse(fr.result),{style:{color:"#A65D37",weight:2,fillOpacity:.15},pointToLayer:function(ft,ll){return L.circleMarker(ll,{radius:5,color:"#A65D37"});}});
+      }
+      _customLayer=lyr.addTo(_map);
+      try{_map.fitBounds(lyr.getBounds(),{padding:[30,30]});}catch(e){}
+      toast("Layer kustom dimuat.","ok");
+      var p=$("#gisPanel");if(p)p.innerHTML=gisPanelHTML();
+    }catch(e){toast("Gagal memuat: "+e.message,"err");}
+  };
+  fr.readAsText(f);
+}
+function kmlToLayer(xml){
+  var g=L.layerGroup();
+  var pts=xml.getElementsByTagName("Point");
+  for(var i=0;i<pts.length;i++){var c=pts[i].getElementsByTagName("coordinates")[0];if(!c)continue;var xy=c.textContent.trim().split(",");L.marker([+xy[1],+xy[0]]).addTo(g);}
+  var lines=xml.getElementsByTagName("LineString");
+  for(var j=0;j<lines.length;j++){var lc=lines[j].getElementsByTagName("coordinates")[0];if(!lc)continue;var pts2=lc.textContent.trim().split(/\s+/).map(function(s){var a=s.split(",");return [+a[1],+a[0]];});L.polyline(pts2,{color:"#A65D37"}).addTo(g);}
+  var polys=xml.getElementsByTagName("Polygon");
+  for(var k=0;k<polys.length;k++){var pc=polys[k].getElementsByTagName("coordinates")[0];if(!pc)continue;var pp=pc.textContent.trim().split(/\s+/).map(function(s){var a=s.split(",");return [+a[1],+a[0]];});L.polygon(pp,{color:"#A65D37",fillOpacity:.15}).addTo(g);}
+  g.getBounds=function(){var all=[];g.eachLayer(function(l){if(l.getLatLng)all.push(l.getLatLng());else if(l.getLatLngs){var f=l.getLatLngs();(function flat(x){x.forEach(function(y){Array.isArray(y)?flat(y):all.push(y);});})(f);}});return L.latLngBounds(all);};
+  return g;
+}
+function clearCustomLayer(){if(_customLayer){_map.removeLayer(_customLayer);_customLayer=null;}var p=$("#gisPanel");if(p)p.innerHTML=gisPanelHTML();toast("Layer kustom dihapus.","ok");}
+
+
+/* ===== MBTILES RASTER OFFLINE (sql.js) ===== */
+var _SQL=null;
+function ensureSqlJs(){
+  return new Promise(function(res,rej){
+    if(_SQL)return res(_SQL);
+    if(window.initSqlJs){window.initSqlJs({locateFile:function(f){return "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/"+f;}}).then(function(S){_SQL=S;res(S);}).catch(rej);return;}
+    var sc=document.createElement("script");
+    sc.src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js";
+    sc.onload=function(){window.initSqlJs({locateFile:function(f){return "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/"+f;}}).then(function(S){_SQL=S;res(S);}).catch(rej);};
+    sc.onerror=function(){rej(new Error("Gagal memuat sql.js (perlu internet sekali untuk mengaktifkan)."));};
+    document.head.appendChild(sc);
+  });
+}
+// Layer Leaflet kustom yang mengambil tile dari MBTiles (SQLite di memori)
+function makeMbtilesLayer(db){
+  var Proto=L.TileLayer.extend({
+    createTile:function(coords,done){
+      var img=document.createElement("img");
+      // MBTiles memakai skema TMS (y terbalik)
+      var z=coords.z, x=coords.x, y=(Math.pow(2,z)-1)-coords.y;
+      try{
+        var st=db.prepare("SELECT tile_data FROM tiles WHERE zoom_level=? AND tile_column=? AND tile_row=?");
+        st.bind([z,x,y]);
+        if(st.step()){
+          var row=st.get(); var bytes=row[0];
+          var blob=new Blob([new Uint8Array(bytes)]);
+          img.onload=function(){URL.revokeObjectURL(img.src);done(null,img);};
+          img.onerror=function(){done(null,img);};
+          img.src=URL.createObjectURL(blob);
+        } else { setTimeout(function(){done(null,img);},0); }
+        st.free();
+      }catch(e){ setTimeout(function(){done(null,img);},0); }
+      return img;
+    }
+  });
+  return new Proto("",{tms:false,maxZoom:22,minZoom:0});
+}
+function loadMbtiles(input){
+  var f=input.files&&input.files[0];if(!f)return;
+  var nm=$("#mbtName");if(nm)nm.textContent="Memuat "+f.name+"…";
+  ensureSqlJs().then(function(SQL){
+    var fr=new FileReader();
+    fr.onload=function(){
+      try{
+        var db=new SQL.Database(new Uint8Array(fr.result));
+        if(_mbtiles){_map.removeLayer(_mbtiles);_mbtiles=null;}
+        _mbtiles=makeMbtilesLayer(db).addTo(_map);
+        _mbtiles.bringToFront();
+        // fokus ke area MBTiles bila ada metadata bounds
+        try{
+          var m=db.exec("SELECT value FROM metadata WHERE name='bounds'");
+          if(m&&m[0]&&m[0].values&&m[0].values[0]){var b=String(m[0].values[0][0]).split(",").map(Number);_map.fitBounds([[b[1],b[0]],[b[3],b[2]]]);}
+        }catch(e){}
+        if(nm)nm.textContent=f.name+" (aktif)";
+        toast("Basemap offline MBTiles aktif.","ok");
+        var pnl=$("#gisPanel");if(pnl)pnl.innerHTML=gisPanelHTML();
+      }catch(e){toast("Gagal baca MBTiles: "+e.message,"err");if(nm)nm.textContent="Unggah .mbtiles";}
+    };
+    fr.onerror=function(){toast("Gagal membaca file.","err");};
+    fr.readAsArrayBuffer(f);
+  }).catch(function(e){toast(e.message,"err");if(nm)nm.textContent="Unggah .mbtiles";});
+}
+function clearMbtiles(){if(_mbtiles){_map.removeLayer(_mbtiles);_mbtiles=null;}var p=$("#gisPanel");if(p)p.innerHTML=gisPanelHTML();toast("Basemap offline dihapus.","ok");}
+
+/* ===== BOOT ===== */
+function boot(){
+  try{ loadLocal(); loadPLocal(); loadSession(); }catch(e){}
+  // Sudah ada sesi tersimpan? Langsung masuk (tanpa wajib server → bisa OFFLINE).
+  try{
+    if(S.session&&S.session.username&&S.ss){ S._gate=false; S.tab="form"; boot2(); if(navigator.onLine)syncPending(); return; }
+    showLogin();
+  }catch(e){ $("#app").innerHTML='<div style="padding:40px;text-align:center;color:#900">Gagal memuat UI: '+(e&&e.message||e)+'</div>'; }
+}
+function boot2(){
+  render();
+  if(S.ss&&navigator.onLine){loadRecords();loadProfils();if(S.session&&S.session.role==="admin")loadUsers();}
+}
+window.addEventListener("online",function(){S.online=true;render();});
+window.addEventListener("offline",function(){S.online=false;render();});
+/* boot dipicu di blok penutup paling akhir (setelah semua fungsi terdefinisi) */
+</script>
+
+<script>
+/* ===== PROFIL: field & combo helper (pakai state pForm) ===== */
+function setP(f,v){S.pForm[f]=v;}
+function setPF(f,v){S.pForm.fieldSheet[f]=v;}
+function setPHz(f,v){var map={pf_from:"depthFrom",pf_to:"depthTo"};var k=map[f];if(k){S.pHzDraft[k]=num(v);}else{S.pHzDraft[f]=v;}}
+function pin(field,label,val,type,ph){return '<div><label class="lbl">'+esc(label)+'</label><input class="in" type="'+(type||"text")+'" value="'+esca(val)+'" placeholder="'+esca(ph||"")+'" '+(type==="number"?'step="any" ':'')+'oninput="setP(\''+field+'\',this.value)"/></div>';}
+function pcombo(field,label,opsiKey,val){var id="pdl_"+opsiKey;var opts=(OPSI[opsiKey]||[]).map(function(o){return '<option value="'+esca(o)+'"></option>';}).join("");return '<div><label class="lbl">'+esc(label)+'</label><input class="in" list="'+id+'" value="'+esca(val)+'" placeholder="kosong / ketik / pilih" oninput="setP(\''+field+'\',this.value)" autocomplete="off"/><datalist id="'+id+'">'+opts+'</datalist></div>';}
+function pfin(field,label,val,ph){return '<div><label class="lbl">'+esc(label)+'</label><input class="in" value="'+esca(val)+'" placeholder="'+esca(ph||"")+'" oninput="setPF(\''+field+'\',this.value)"/></div>';}
+function phzin(field,label,val,type,ph){return '<div><label class="lbl">'+esc(label)+'</label><input class="in" type="'+(type||"text")+'" value="'+esca(val)+'" placeholder="'+esca(ph||"")+'" '+(type==="number"?'step="any" ':'')+'oninput="setPHz(\''+field+'\',this.value)"/></div>';}
+
+/* ===== TAB: PROFIL TANAH (form + database) ===== */
+function viewProfil(){
+  if(S.pForm._openDb) return viewProfilDb();
+  var canEdit=!S.session||S.session.role==="admin"||S.session.role==="editor";
+  var f=S.pForm;
+  return '<div class="card">'+
+    '<div class="row" style="justify-content:space-between"><h3>🧱 '+(S.pEditingId?"Edit Profil":"Formulir Profil Tanah")+'</h3>'+
+      '<button class="chip" onclick="S.pForm._openDb=true;render()">🗂️ Database Profil</button></div>'+
+    '<div class="sub">Deskripsi profil pedon + hasil lab per kedalaman. Kolom fisiografi/drainase: combo CSV.</div>'+
+    /* Identitas */
+    '<div class="grid g2">'+
+      pin("pedonNo","Pedon No *",f.pedonNo,"text","P1")+
+      pin("simbol","Simbol",f.simbol)+
+      pin("klasUsda","Klasifikasi USDA",f.klasUsda)+
+      pin("klasFao","Klasifikasi FAO",f.klasFao)+
+      pin("klasPpt","Klasifikasi PPT",f.klasPpt)+
+      pin("lokasi","Lokasi",f.lokasi)+
+      pcombo("fisiografi","Fisiografi","fisiografi",f.fisiografi)+
+      pin("ketinggian","Ketinggian (m dpl)",f.ketinggian,"number")+
+      pin("kemiringan","Kemiringan (%)",f.kemiringan,"number")+
+      pin("vegetasi","Vegetasi",f.vegetasi)+
+      pin("bahanInduk","Bahan Induk",f.bahanInduk)+
+      pcombo("drainase","Drainase","drainase",f.drainase)+
+      pin("kelembaban","Kelembaban Tanah",f.kelembaban)+
+      pin("mukaAir","Muka Air Tanah",f.mukaAir)+
+      pin("batuan","Batuan",f.batuan)+
+      pin("erosi","Erosi",f.erosi)+
+      pin("surveyor","Surveyor",f.surveyor)+
+      dateFieldP(f.tanggal)+
+    '</div>'+
+    /* Lembar lapangan */
+    '<div class="sep"><label class="lbl" style="color:var(--hijau)">Lembar Lapangan (Description Sheet)</label>'+
+    '<div class="grid g2" style="margin-top:6px">'+
+      pfin("posisiFisiografis","Posisi Fisiografis",f.fieldSheet.posisiFisiografis,"plateau/slope/plain")+
+      pfin("topografiSekitar","Topografi Sekitar (% lereng)",f.fieldSheet.topografiSekitar,"0-2/2-8/8-16")+
+      pfin("mikrotopografi","Mikrotopografi",f.fieldSheet.mikrotopografi,"gilgai/contour")+
+      pfin("kondisiKelembaban","Kondisi Kelembaban",f.fieldSheet.kondisiKelembaban,"moist to 150 cm")+
+      pfin("ukuranBatuan","Batuan: Ukuran",f.fieldSheet.ukuranBatuan)+
+      pfin("proporsiBatuan","Batuan: Proporsi",f.fieldSheet.proporsiBatuan)+
+      pfin("singkapanBatuan","Singkapan Batuan",f.fieldSheet.singkapanBatuan,"Ya/Tidak")+
+      pfin("saltAlkali","Salt/Alkali",f.fieldSheet.saltAlkali)+
+    '</div>'+
+    '<div style="margin-top:6px">'+pfin("pengaruhManusia","Pengaruh Manusia",f.fieldSheet.pengaruhManusia)+'</div></div>'+
+    /* GPS + Foto */
+    '<div class="sep"><label class="lbl">Koordinat & Foto Profil</label>'+
+      '<button class="btn btn-p btn-full" onclick="ambilGPSP()">📍 Ambil Lokasi GPS Profil</button>'+
+      '<div class="grid g2" style="margin-top:8px">'+pin("latitude","Latitude",f.latitude,"number")+pin("longitude","Longitude",f.longitude,"number")+'</div>'+
+      '<div class="row" style="margin-top:8px">'+
+        '<label class="btn btn-s" style="flex:1">📷 Kamera<input type="file" accept="image/*" capture="environment" style="display:none" onchange="pickFotoP(this)"/></label>'+
+        '<label class="btn btn-s" style="flex:1">🖼️ Galeri<input type="file" accept="image/*" style="display:none" onchange="pickFotoP(this)"/></label>'+
+      '</div>'+
+      '<div id="pFotoPrev" style="margin-top:8px">'+(f.foto?'<img src="'+esca(f.foto)+'" style="max-width:160px;border-radius:10px;border:1px solid var(--garis);cursor:zoom-in" onclick="lbOpen(this.src,\'Foto Profil\')"/>':'')+'</div>'+
+    '</div>'+
+    /* Horizon terstruktur */
+    pHzSection()+
+    /* Lab per kedalaman */
+    pLabSection()+
+    '<div style="margin-top:6px">'+pin("catatan","Catatan",f.catatan)+'</div>'+
+    (canEdit?'<button class="btn btn-p btn-full" id="btnSaveP" style="margin-top:12px" onclick="saveProfil()">💾 '+(S.pEditingId?"Update Profil":"Simpan Profil")+'</button>':'<div class="hint" style="color:#b45309;margin-top:8px">Mode viewer: tidak bisa menyimpan.</div>')+
+  '</div>';
+}
+function dateFieldP(val){
+  var editable=isAdmin()&&S.pEditingId;
+  if(editable)return '<div><label class="lbl">Tanggal <span style="color:#b45309">(admin: koreksi)</span></label><input class="in" type="date" value="'+esca(val)+'" oninput="setP(\'tanggal\',this.value)"/></div>';
+  return '<div><label class="lbl">Tanggal <span style="color:#6B6B5F">(terkunci)</span></label><input class="in" type="date" value="'+esca(val)+'" readonly disabled style="background:#f0f0ea;color:#555"/></div>';
+}
+function ambilGPSP(){if(!navigator.geolocation){toast("GPS tidak didukung.","err");return;}toast("Mengambil GPS…","info");navigator.geolocation.getCurrentPosition(function(p){S.pForm.latitude=+p.coords.latitude.toFixed(6);S.pForm.longitude=+p.coords.longitude.toFixed(6);var m=$("#main");if(m)m.innerHTML=viewProfil();toast("📍 Terkunci (±"+Math.round(p.coords.accuracy)+" m).","ok");},function(e){toast("Gagal GPS: "+e.message,"err");},{enableHighAccuracy:true,timeout:15000});}
+function pickFotoP(input){var f=input.files&&input.files[0];if(!f)return;compressImg(f,1280,0.8).then(function(d){S.pForm.foto=d;var pv=$("#pFotoPrev");if(pv)pv.innerHTML='<img src="'+esca(d)+'" style="max-width:160px;border-radius:10px;border:1px solid var(--garis);cursor:zoom-in" onclick="lbOpen(this.src,\'Foto Profil\')"/>';toast("Foto profil ditambahkan.","ok");}).catch(function(e){toast(e.message,"err");});input.value="";}
+
+/* Horizon profil terstruktur */
+function pHzSection(){
+  var d=S.pHzDraft;
+  var list=S.pHorizons.slice().sort(function(a,b){return a.depthFrom-b.depthFrom;}).map(function(h,i){
+    return '<div class="hz-item"><div class="row" style="justify-content:space-between"><b>'+esc(h.horizonName||"-")+' <span style="font-weight:400;color:#6B6B5F">('+fmtDepth(h.depthFrom,h.depthTo)+' cm)</span></b><button class="chip" style="color:#dc2626;border-color:#fecaca" onclick="delPHz('+i+')">Hapus</button></div><div style="margin-top:3px;color:#55554E">'+esc(composeDesc(h))+'</div></div>';
+  }).join("");
+  return '<div class="sep"><label class="lbl" style="color:var(--hijau)">Deskripsi Profil (per Horizon)</label>'+
+    (list?'<div style="margin:6px 0">'+list+'</div>':'<div class="hint" style="margin:6px 0">Belum ada horizon.</div>')+
+    '<div class="card" style="background:var(--krem);margin:0">'+
+    '<div class="grid g3">'+phzin("horizonName","Horizon",d.horizonName,"text","Ah/AE/Bhs")+phzin("pf_from","Dari (cm)",d.depthFrom,"number")+phzin("pf_to","Sampai (cm)",d.depthTo,"number")+'</div>'+
+    '<div class="grid g2" style="margin-top:8px">'+
+      phzin("warna","Warna Matrik",d.warna,"text","Kelabu (2,5Y 5/1)")+
+      phzin("karatan","Karatan (Mottling)",d.karatan)+
+      phzin("tekstur","Tekstur",d.tekstur,"text","sand / loamy sand")+
+      phzin("struktur","Struktur",d.struktur,"text","lemah, granular, kecil")+
+      phzin("konsistensi","Konsistensi",d.konsistensi,"text","lembab, gembur")+
+      phzin("kutan","Kutan",d.kutan)+
+      phzin("sementasi","Sementasi",d.sementasi)+
+      phzin("padas","Padas",d.padas)+
+      phzin("pori","Pori",d.pori)+
+      phzin("akar","Akar",d.akar)+
+      phzin("batuanMineral","Batuan & Mineral",d.batuanMineral)+
+      phzin("batas","Batas Horizon",d.batas,"text","jelas rata")+
+    '</div>'+
+    '<div style="margin-top:8px">'+phzin("deskripsi","Catatan Tambahan",d.deskripsi)+'</div>'+
+    '<button class="btn btn-s btn-full" style="margin-top:10px" onclick="addPHz()">+ Tambah Horizon</button>'+
+    '</div></div>';
+}
+function composeDesc(h){var p=[h.warna,h.karatan,h.tekstur,h.struktur?"struktur "+h.struktur:"",h.konsistensi,h.kutan?"kutan "+h.kutan:"",h.sementasi?"sementasi "+h.sementasi:"",h.padas?"padas "+h.padas:"",h.pori?"pori "+h.pori:"",h.akar?"akar "+h.akar:"",h.batuanMineral?"batuan/mineral "+h.batuanMineral:"",h.batas?"batas horizon "+h.batas:""].filter(Boolean);var st=p.join("; ");var ex=(h.deskripsi||"").trim();return st&&ex?st+". "+ex:(st||ex||"-");}
+function addPHz(){var d=S.pHzDraft;if(!d.horizonName){toast("Isi simbol horizon.","err");return;}S.pHorizons.push(Object.assign({},d));S.pHzDraft=emptyPHz();S.pHzDraft.depthFrom=num(d.depthTo);var m=$("#main");if(m)m.innerHTML=viewProfil();}
+function delPHz(i){var srt=S.pHorizons.slice().sort(function(a,b){return a.depthFrom-b.depthFrom;});var t=srt[i];S.pHorizons=S.pHorizons.filter(function(x){return x!==t;});var m=$("#main");if(m)m.innerHTML=viewProfil();}
+
+/* Lab per kedalaman */
+function pLabSection(){
+  var rows=S.pLab.map(function(l,idx){
+    var cells=[["depthFrom","Dari"],["depthTo","S/d"],["pasir","Pasir%"],["debu","Debu%"],["liat","Liat%"],["phH2o","pH H2O"],["phKcl","pH KCl"],["ash","Ash%"],["cOrg","C-org%"],["nTot","N%"],["cn","C/N"],["p2o5","P2O5"],["k2o","K2O"],["pBray","P Bray"],["cec","CEC"],["ca","Ca"],["mg","Mg"],["k","K"],["na","Na"],["al","Al"],["h","H"],["ecec","ECEC"],["alSat","Kej.Al%"],["acidSat","Kej.Asam%"],["baseSat","Kej.Basa%"],["fe","Fe ppm"],["mn","Mn ppm"],["zn","Zn ppm"],["cu","Cu ppm"],["b","B ppm"],["cond","Cond dS/m"]].map(function(c){
+      return '<div><label class="lbl" style="font-size:8px">'+c[1]+'</label><input class="in" type="number" step="any" value="'+esca(l[c[0]]==null?"":l[c[0]])+'" style="padding:5px 6px" oninput="S.pLab['+idx+'][\''+c[0]+'\']=this.value===\'\'?\'\':parseFloat(this.value)"/></div>';
+    }).join("");
+    var lvlEditor=[["phH2o","pH H2O","ph"],["cOrg","C-ORG","c"],["nTot","N","n"],["cn","C/N","cn"],["p2o5","P2O5","p"],["k2o","K2O","p"],["pBray","P BRAY","p"],["cec","CEC","cec"],["ca","Ca","ca"],["mg","Mg","mg"],["k","K","k"],["na","Na","na"],["alSat","KEJ.AL","sat"],["acidSat","KEJ.ASAM","sat"],["baseSat","KEJ.BASA","sat"],["ash","ASH",""],["ecec","ECEC",""],["fe","Fe","micro"],["mn","Mn","micro"],["zn","Zn","micro"],["cu","Cu","micro"],["b","B","micro"],["cond","Cond",""]].map(function(c){
+      var cur=(l.levels&&l.levels[c[0]])||"";
+      var opts=["","V.Low","Low","Medium","High","V.High","V.Acid","Acid","Sl.Acid","Neutral","Sl.Alk","Alkaline","Ur"].map(function(o){return '<option value="'+esca(o)+'"'+(o===cur?" selected":"")+'>'+(o||"(auto)")+'</option>';}).join("");
+      return '<div><label class="lbl" style="font-size:8px">'+c[1]+'</label><select class="in" style="padding:5px 6px" onchange="if(!S.pLab['+idx+'].levels)S.pLab['+idx+'].levels={};S.pLab['+idx+'].levels[\''+c[0]+'\']=this.value">'+opts+'</select></div>';
+    }).join("");
+    var editor='<details style="margin-top:8px"><summary style="font-size:9px;font-weight:800;color:#fff;background:#5A5A40;border-radius:6px;padding:4px 8px;cursor:pointer;display:inline-block">EDIT LEVEL / HARKAT (kosong = otomatis)</summary><div class="grid g4" style="margin-top:6px">'+lvlEditor+'</div></details>';
+    return '<div class="card" style="background:#fff;margin:0 0 8px;padding:8px"><div class="row" style="justify-content:space-between;margin-bottom:4px"><b style="font-size:10px">SAMPEL #'+(idx+1)+'</b><button class="chip" style="color:#dc2626;border-color:#fecaca" onclick="S.pLab.splice('+idx+',1);var m=$(\'#main\');if(m)m.innerHTML=viewProfil()">Hapus</button></div><div class="grid g4">'+cells+'</div>'+editor+'</div>';
+  }).join("");
+  return '<div class="sep"><label class="lbl" style="color:var(--hijau)">Hasil Analisa Lab (per Kedalaman)</label>'+
+    '<div class="hint" style="margin:4px 0 8px">Opsional. Bila diisi, "Tabel Hasil Analisa Kimia" ikut tercetak di laporan PDF. Kosongkan yang tak ada datanya.</div>'+
+    rows+
+    '<button class="btn btn-s btn-full" onclick="addLab()">+ Tambah Sampel Lab</button>'+
+    '<button class="btn btn-s btn-full" style="margin-top:6px;border-style:dashed;color:#A65D37" onclick="preset2Tier()">⛏ Buat 2 Tier Gambut (0–50 & 50–100 cm)</button>'+
+  '</div>';
+}
+function addLab(){var last=S.pLab[S.pLab.length-1];var l=emptyLab();l.depthFrom=last?num(last.depthTo):0;S.pLab.push(l);var m=$("#main");if(m)m.innerHTML=viewProfil();}
+function preset2Tier(){var a=emptyLab();a.depthFrom=0;a.depthTo=50;var b=emptyLab();b.depthFrom=50;b.depthTo=100;S.pLab=[a,b];var m=$("#main");if(m)m.innerHTML=viewProfil();}
+</script>
+
+<script>
+/* ===== SIMPAN / MUAT PROFIL ===== */
+function saveProfil(){
+  var f=S.pForm;
+  if(!String(f.pedonNo).trim()){toast("Pedon No wajib diisi.","err");return;}
+  if(!S.ss){toast("Spreadsheet belum terhubung.","err");return;}
+  if(!S.pEditingId){f.tanggal=new Date().toISOString().slice(0,10);}
+  var btn=$("#btnSaveP");if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span> Menyimpan…';}
+  var id=S.pEditingId||("prof-"+Date.now());
+  var horizons=S.pHorizons.map(function(h){return Object.assign({},h);});
+  var labRows=S.pLab.map(function(l){return Object.assign({},l);});
+  var rec=Object.assign({},f,{id:id,horizons:horizons,labRows:labRows,fieldSheet:f.fieldSheet,syncStatus:"synced"});
+  call("upsertProfilToSheet",S.ss,rec).then(function(){
+    var exist=S.profils.filter(function(x){return x.id===id;})[0];
+    if(exist){S.profils=S.profils.map(function(x){return x.id===id?rec:x;});}else{S.profils.unshift(rec);}
+    savePLocal();
+    S.pEditingId=null;S.pForm=emptyProfil();S.pHorizons=[];S.pHzDraft=emptyPHz();S.pLab=[];
+    toast("✅ Profil "+rec.pedonNo+" tersimpan.","ok");S.pForm._openDb=true;render();
+  }).catch(function(e){if(btn){btn.disabled=false;btn.innerHTML="💾 Simpan Profil";}toast("Gagal: "+e.message,"err");});
+}
+function loadProfils(){
+  if(!S.ss)return;
+  call("fetchProfilsFromSheet",S.ss).then(function(list){S.profils=list||[];savePLocal();var m=$("#main");if(m&&S.tab==="profil")m.innerHTML=viewProfil();}).catch(function(){});
+}
+function savePLocal(){try{localStorage.setItem("ss_profils",JSON.stringify(S.profils));}catch(e){}}
+function loadPLocal(){try{S.profils=JSON.parse(localStorage.getItem("ss_profils")||"[]");}catch(e){}}
+
+function editProfil(id){
+  var r=S.profils.filter(function(x){return x.id===id;})[0];if(!r)return;
+  S.pEditingId=id;
+  S.pForm=Object.assign(emptyProfil(),r);
+  S.pForm.fieldSheet=Object.assign(emptyProfil().fieldSheet,r.fieldSheet||{});
+  delete S.pForm.horizons;delete S.pForm.labRows;S.pForm._openDb=false;
+  S.pHorizons=(r.horizons||[]).map(function(h){return Object.assign(emptyPHz(),h);});
+  S.pLab=(r.labRows||[]).map(function(l){return Object.assign(emptyLab(),l);});
+  S.tab="profil";render();
+}
+function delProfil(id){
+  var r=S.profils.filter(function(x){return x.id===id;})[0];if(!r)return;
+  if(!confirm("Hapus profil "+r.pedonNo+"?"))return;
+  call("deleteProfilFromSheet",S.ss,id).catch(function(){}).then(function(){S.profils=S.profils.filter(function(x){return x.id!==id;});savePLocal();toast("Profil dihapus.","ok");render();});
+}
+
+/* ===== DATABASE PROFIL ===== */
+function viewProfilDb(){
+  var canEdit=!S.session||S.session.role==="admin"||S.session.role==="editor";
+  var q=(S.pQ||"").toLowerCase();
+  var list=S.profils.filter(function(r){return !q||[r.pedonNo,r.simbol,r.lokasi,r.klasUsda,r.surveyor].some(function(v){return String(v||"").toLowerCase().indexOf(q)>=0;});});
+  var cards=list.map(function(r){
+    var sel=S.pSelId===r.id;
+    return '<div class="rec'+(sel?" sel":"")+'" onclick="S.pSelId=\''+r.id+'\';var m=$(\'#main\');if(m)m.innerHTML=viewProfilDb()">'+
+      '<div class="row" style="justify-content:space-between"><span class="id">'+esc(r.pedonNo)+' <span style="font-weight:400;color:#6B6B5F">['+esc(r.simbol||"-")+']</span></span><span style="font-size:11px;color:#6B6B5F">'+esc(r.tanggal||"")+'</span></div>'+
+      '<div style="font-size:11px;color:#55554E;margin-top:2px">'+esc(r.klasUsda||"-")+' · '+esc(r.lokasi||"-")+' · '+((r.horizons||[]).length)+' horizon</div>'+
+      (sel?('<div class="chipbar">'+
+        '<span class="chip" onclick="event.stopPropagation();printProfil(\''+r.id+'\',\'auto\')">🖨️ Laporan PDF</span>'+
+        '<span class="chip" onclick="event.stopPropagation();printProfil(\''+r.id+'\',\'portrait\')">A4 Potret</span>'+
+        '<span class="chip" onclick="event.stopPropagation();printProfil(\''+r.id+'\',\'landscape\')">A4 Landscape</span>'+
+        '<span class="chip" onclick="event.stopPropagation();printProfilForm(\''+r.id+'\')">📋 Formulir PDF</span>'+
+        (canEdit?'<span class="chip" onclick="event.stopPropagation();editProfil(\''+r.id+'\')">✏️ Edit</span>':'')+
+        (canEdit?'<span class="chip" style="color:#dc2626;border-color:#fecaca" onclick="event.stopPropagation();delProfil(\''+r.id+'\')">🗑️ Hapus</span>':'')+
+      '</div>'):'')+
+    '</div>';
+  }).join("");
+  return '<div class="card"><div class="row" style="justify-content:space-between"><h3>🗂️ Database Profil ('+S.profils.length+')</h3>'+
+    '<button class="chip" onclick="S.pForm._openDb=false;S.pEditingId=null;S.pForm=emptyProfil();S.pHorizons=[];S.pLab=[];render()">➕ Profil Baru</button></div>'+
+    '<input class="in" placeholder="Cari pedon, simbol, lokasi, klasifikasi…" value="'+esca(S.pQ||"")+'" oninput="S.pQ=this.value;var m=$(\'#main\');if(m)m.innerHTML=viewProfilDb()" style="margin:8px 0"/>'+
+    '<button class="btn btn-s btn-full" style="margin-bottom:10px" onclick="loadProfils()">🔄 Muat ulang dari Sheet</button>'+
+    (cards||'<div class="hint">Belum ada profil.</div>')+
+  '</div>';
+}
+
+/* ===== DETEKSI GAMBUT + LEVEL ===== */
+function isGambut(p){var t=[p.klasUsda,p.klasFao,p.klasPpt,p.bahanInduk,p.simbol,p.pedonNo].join(" ").toLowerCase();return /histosol|hemist|saprist|fibrist|organosol|gambut|organik/.test(t);}
+function lvlOf(key,v){if(v===""||v==null||isNaN(+v))return "";var n=+v;function pick(b,l){for(var i=0;i<b.length;i++)if(n<b[i])return l[i];return l[l.length-1];}
+  switch(key){case"ph":return pick([4.5,5.5,6.6,7.6,8.5],["V.Acid","Acid","Sl.Acid","Neutral","Sl.Alk","Alkaline"]);
+  case"c":return pick([1,2,3,5],["V.Low","Low","Medium","High","V.High"]);
+  case"n":return pick([0.1,0.21,0.51,0.76],["V.Low","Low","Medium","High","V.High"]);
+  case"cn":return pick([5,11,16,26],["V.Low","Low","Medium","High","V.High"]);
+  case"p":return pick([10,21,41,61],["V.Low","Low","Medium","High","V.High"]);
+  case"cec":return pick([5,17,25,41],["V.Low","Low","Medium","High","V.High"]);
+  case"ca":return pick([2,6,11,21],["V.Low","Low","Medium","High","V.High"]);
+  case"mg":return pick([0.4,1.1,2.1,8.1],["V.Low","Low","Medium","High","V.High"]);
+  case"k":return pick([0.1,0.3,0.6,1.1],["V.Low","Low","Medium","High","V.High"]);
+  case"na":return pick([0.1,0.4,0.8,1.1],["V.Low","Low","Medium","High","V.High"]);
+  case"sat":return pick([20,41,61,81],["V.Low","Low","Medium","High","V.High"]);
+  case"micro":return pick([2,5,10,20],["V.Low","Low","Medium","High","V.High"]);
+  default:return "";}}
+function getLvl(l,pid,ak){var man=l.levels&&l.levels[pid];if(man)return man;return ak?lvlOf(ak,l[pid]):"";}
+function vv(x){return (x===""||x==null||isNaN(+x))?"-":(+x);}
+</script>
+
+<script>
+/* ===== PDF LAPORAN PROFIL ===== */
+function printProfil(id,paper){
+  var p=S.profils.filter(function(x){return x.id===id;})[0];if(!p)return;
+  var gambut=isGambut(p);
+  paper=paper||'auto';
+  var lab=(p.labRows||[]).slice().sort(function(a,b){return a.depthFrom-b.depthFrom;});
+  var hz=(p.horizons||[]).slice().sort(function(a,b){return a.depthFrom-b.depthFrom;});
+  function baris(l,v){return '<tr><td class="k">'+l+'</td><td>:</td><td>'+esc(v||"-")+'</td></tr>';}
+  var hzRows=hz.map(function(h){return '<tr><td style="text-align:center;font-weight:700">'+esc(h.horizonName||"")+'</td><td style="text-align:center;white-space:nowrap">'+fmtDepth(h.depthFrom,h.depthTo)+'</td><td>'+esc(composeDesc(h))+'</td></tr>';}).join("");
+
+  // Tabel kimia
+  var chem="";
+  if(lab.length){
+    if(gambut){
+      var tierName=function(i,l){return (i===0?"Surface Tier":i===1?"Sub-surface Tier":"Tier "+(i+1))+"<br/>("+l.depthFrom+" – "+l.depthTo+" cm)";};
+      var params=[["pH ( H₂0, 1 : 5)","phH2o","ph"],["pH (KCL 1N, 1 : 5)","phKcl","",true],["C-Organik (%)","cOrg","c"],["N-Organik (%)","nTot","n"],["C/N Ratio","cn","cn"],["P₂O₅ (25 % HCL) (ppm)","p2o5","p"],["K₂O (25 % HCL) (ppm)","k2o","p"],["P₂O₅ Bray I (ppm)","pBray","p"],["CEC (pH 7) (me, %)","cec","cec"],["Ca (me, %)","ca","ca"],["Mg (me, %)","mg","mg"],["K (me, %)","k","k"],["Na (me, %)","na","na"],["Sum Base","__sum","",true],["Al (me, %)","al","",true],["H (me, %)","h","",true],["Exchange Acidity","__ea","",true],["ECEC","ecec","",true],["Acidity Saturation (%)","acidSat","sat"],["Base Saturation (%)","baseSat","sat"]];
+      chem='<div class="ttl2">Tabel Hasil Analisa Kimia dan Gambar Profil '+esc(p.pedonNo)+'</div>'+
+        '<table class="karak"><thead>'+
+        '<tr><th rowspan="3" style="min-width:150px;vertical-align:middle">KARAKTERISTIK</th><th colspan="'+(lab.length*2)+'">'+esc(p.pedonNo)+(p.simbol?" ("+esc(p.simbol)+")":"")+'</th></tr>'+
+        '<tr>'+lab.map(function(l,i){return '<th colspan="2" style="font-weight:700">'+tierName(i,l)+'</th>';}).join("")+'</tr>'+
+        '<tr>'+lab.map(function(l){return '<th>Value</th><th>Level</th>';}).join("")+'</tr>'+
+        '</thead><tbody>'+
+        params.map(function(pr){
+          function calc(l){var val;if(pr[1]==="__sum")val=(+l.ca||0)+(+l.mg||0)+(+l.k||0)+(+l.na||0);else if(pr[1]==="__ea")val=(+l.al||0)+(+l.h||0);else val=l[pr[1]];return (val===""||val==null||isNaN(+val))?"-":(+(+val).toFixed(2));}
+          if(pr[3]){ // merged: satu nilai membentang 2 kolom (Value|Level) per tier, tanpa level
+            return '<tr><td class="lbl">'+pr[0]+'</td>'+lab.map(function(l){return '<td class="val" colspan="2">'+calc(l)+'</td>';}).join("")+'</tr>';
+          }
+          return '<tr><td class="lbl">'+pr[0]+'</td>'+lab.map(function(l){
+            var lv=pr[2]?getLvl(l,pr[1],pr[2]):"";
+            return '<td class="val">'+calc(l)+'</td><td class="lv">'+esc(lv)+'</td>';
+          }).join("")+'</tr>';
+        }).join("")+'</tbody></table>';
+    } else {
+      chem='<div class="ttl2">Tabel Hasil Analisa Kimia dan Gambar Profil '+esc(p.pedonNo)+'</div>'+
+        '<table class="hz"><thead><tr><th rowspan="2">Kedalaman<br/>(cm)</th><th colspan="2">pH (1:2,5)</th><th colspan="2">C-N</th><th colspan="4">Total Makro %,DM</th><th>P<br/>Bray</th><th colspan="4">Basa Tukar me%</th><th>Sum<br/>Base</th><th>CEC<br/>pH7</th><th>Base<br/>Sat</th><th colspan="2">1M KCl</th><th>Exch<br/>Acid</th><th>ECEC</th><th colspan="2">Kejenuhan %</th><th colspan="5">Unsur Mikro ppm</th><th>Cond<br/>dS/m</th></tr>'+
+        '<tr><th>H₂O</th><th>KCl</th><th>C</th><th>N</th><th>P</th><th>K</th><th>Mg</th><th>Ca</th><th>ppm</th><th>Ca</th><th>Mg</th><th>K</th><th>Na</th><th>Σ</th><th>me%</th><th>%</th><th>Al</th><th>H</th><th>me%</th><th>me%</th><th>Al</th><th>Basa</th><th>Fe</th><th>Mn</th><th>Zn</th><th>Cu</th><th>B</th><th></th></tr></thead><tbody>'+
+        lab.map(function(l){var sum=(+l.ca||0)+(+l.mg||0)+(+l.k||0)+(+l.na||0);var ea=(+l.al||0)+(+l.h||0);
+          function cel(fld,ak,bold){var val=vv(l[fld]);var lv=ak?getLvl(l,fld,ak):"";return '<td>'+(bold?'<b>'+val+'</b>':val)+(lv?'<br/><i style="font-size:6px;color:#555">'+esc(lv)+'</i>':'')+'</td>';}
+          return '<tr><td style="text-align:center;white-space:nowrap">'+l.depthFrom+' – '+l.depthTo+'</td>'+cel("phH2o","ph",true)+'<td>'+vv(l.phKcl)+'</td>'+cel("cOrg","c")+cel("nTot","n")+cel("p2o5","p")+cel("k2o","p")+cel("mg","mg")+cel("ca","ca")+cel("pBray","p")+cel("ca","ca")+cel("mg","mg")+cel("k","k")+cel("na","na")+'<td>'+(sum?sum.toFixed(2):"-")+'</td>'+cel("cec","cec")+cel("baseSat","sat")+'<td>'+vv(l.al)+'</td><td>'+vv(l.h)+'</td><td>'+(ea?ea.toFixed(2):"-")+'</td>'+cel("ecec","")+cel("alSat","sat")+cel("acidSat","sat")+cel("fe","micro")+cel("mn","micro")+cel("zn","micro")+cel("cu","micro")+cel("b","micro")+'<td>'+vv(l.cond)+'</td></tr>';}).join("")+'</tbody></table>';
+    }
+  }
+  var hasFoto=p.foto&&/^data:|^https?:/.test(p.foto);
+  var fotoImg=hasFoto?'<img src="'+esca(p.foto)+'" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" style="max-width:100%;max-height:'+(lab.length?"600px":"620px")+';object-fit:contain;border:1px solid #999;border-radius:4px"/>':"";
+  var html='<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"/><title>Laporan Profil '+esc(p.pedonNo)+'</title><style>'+
+    ''+(paper==="portrait"?"@page{size:A4 portrait;margin:14mm}":paper==="landscape"?"@page{size:A4 landscape;margin:12mm}":(lab.length?"@page{size:A4 landscape;margin:12mm}":"@page{size:A4 portrait;margin:14mm}"))+'*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{font-family:Inter,Arial,sans-serif;font-size:11px;color:#111;margin:0}'+
+    'h1{text-align:center;font-size:15px;margin:0 0 2px}.sub{text-align:center;font-size:9px;color:#555;border-bottom:2px solid #1b4d3e;padding-bottom:6px;margin-bottom:12px}'+
+    'table.info{border-collapse:collapse}table.info td{padding:1.5px 4px;vertical-align:top}table.info td.k{width:150px;font-weight:600}'+
+    '.ttl2{font-weight:800;font-size:12px;margin:12px 0 5px;color:#1b4d3e}.desc{font-weight:800;font-size:11px;text-transform:uppercase;border-left:3px solid #1b4d3e;padding-left:6px;margin:12px 0 5px}'+
+    'table.hz{border-collapse:collapse;width:100%;margin-top:4px}table.hz th{border:1px solid #333;background:#e8efe9;font-size:8px;padding:3px}table.hz td{border:1px solid #555;font-size:8px;padding:3px;text-align:center}table.hz td:last-child,table.hz td:nth-child(3){text-align:left}'+
+    'table.karak{border-collapse:collapse;margin:0 auto;min-width:420px}table.karak th,table.karak td{border:1px solid #64748b;font-size:9px;padding:3px 8px}table.karak th{background:#d9e2dc}table.karak td.lbl{font-weight:600}table.karak td.val{text-align:center}table.karak td.lv{text-align:center;font-style:italic;color:#444}'+
+    '.page2{page-break-before:always}'+
+    '.kimia-foto{display:flex;gap:16px;align-items:flex-start}.kimia-kiri{flex:0 0 auto}.foto-kanan{flex:1;text-align:center}'+
+    'table.karak td.merged{text-align:center;font-weight:600}'+
+    '.sign{margin-top:24px;display:flex;justify-content:flex-end;text-align:center}.sign-name{margin-top:52px;font-weight:700;text-decoration:underline}.sign-role{font-size:9px;color:#555}'+
+    '</style></head><body>'+
+    '<h1>LAPORAN DESKRIPSI PROFIL TANAH</h1><div class="sub">'+esc(p.lokasi||"")+'</div>'+
+    '<table class="info">'+baris("Pedon No",p.pedonNo)+baris("Simbol",p.simbol)+baris("Klasifikasi (USDA)",p.klasUsda)+baris("Klasifikasi (FAO)",p.klasFao)+baris("Klasifikasi (PPT)",p.klasPpt)+baris("Lokasi",p.lokasi)+baris("Fisiografi",p.fisiografi)+baris("Ketinggian",p.ketinggian?p.ketinggian+" m dpl":"")+baris("Kemiringan",p.kemiringan?p.kemiringan+" %":"")+baris("Vegetasi",p.vegetasi)+baris("Bahan Induk",p.bahanInduk)+baris("Drainase",p.drainase)+baris("Kelembaban Tanah",p.kelembaban)+baris("Muka Air Tanah",p.mukaAir)+baris("Batuan",p.batuan)+baris("Erosi",p.erosi)+baris("Surveyor",p.surveyor)+baris("Tanggal",p.tanggal)+'</table>'+
+    '<div class="desc">Deskripsi Profil :</div>'+
+    '<table class="hz"><thead><tr><th style="width:70px">Horizon</th><th style="width:90px">Kedalaman (cm)</th><th>Deskripsi</th></tr></thead><tbody>'+(hzRows||'<tr><td colspan="3">-</td></tr>')+'</tbody></table>'+
+    (p.catatan?'<div style="margin-top:8px"><b>Keterangan:</b> '+esc(p.catatan)+'</div>':"")+
+    ((chem||fotoImg)?'<div class="page2"><div class="kimia-foto">'+
+      '<div class="kimia-kiri">'+chem+'</div>'+
+      (fotoImg?'<div class="foto-kanan"><div class="ttl2">Gambar Profil '+esc(p.pedonNo)+'</div>'+fotoImg+'</div>':'')+
+    '</div></div>':"")+
+    '<div class="sign"><div>Surveyor Tanah,<div class="sign-name">'+esc(p.surveyor||"________________")+'</div><div class="sign-role">Surveyor Lapangan</div></div></div>'+
+    '<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>';
+  var w=window.open("","_blank");if(!w){toast("Popup diblokir.","err");return;}w.document.write(html);w.document.close();
+}
+
+/* ===== PDF FORMULIR PROFIL (lembar lapangan) ===== */
+function printProfilForm(id){
+  var p=S.profils.filter(function(x){return x.id===id;})[0];if(!p)return;
+  var fs=p.fieldSheet||{};
+  var hz=(p.horizons||[]).slice().sort(function(a,b){return a.depthFrom-b.depthFrom;});
+  function ln(l,v){return '<div class="fl"><span class="fk">'+l+'</span> : <span class="fv">'+esc(v||"&nbsp;")+'</span></div>';}
+  var hzRows=hz.map(function(h){return '<tr><td class="c">'+esc(h.horizonName||"")+'</td><td class="c">'+fmtDepth(h.depthFrom,h.depthTo)+'</td><td>'+esc(composeDesc(h))+'</td></tr>';}).join("");
+  var empties=Math.max(0,6-hz.length);for(var i=0;i<empties;i++)hzRows+='<tr><td class="c">&nbsp;</td><td></td><td></td></tr>';
+  var html='<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"/><title>Formulir Profil '+esc(p.pedonNo)+'</title><style>'+
+    '@page{size:A4 portrait;margin:14mm}*{box-sizing:border-box}body{font-family:Inter,Arial,sans-serif;font-size:10.5px;color:#111;margin:0;line-height:1.6}'+
+    'h1{text-align:center;font-size:14px;letter-spacing:1px;margin:0 0 2px}.sub{text-align:center;font-size:9px;color:#444;margin-bottom:10px;border-bottom:2px solid #111;padding-bottom:6px}'+
+    '.cols{display:grid;grid-template-columns:1fr 1fr;column-gap:26px}.fl{margin:2px 0}.fk{display:inline-block;min-width:150px;font-weight:600}.fv{border-bottom:1px dotted #555;padding:0 4px;font-weight:500}'+
+    '.sect{font-weight:700;margin:10px 0 4px;text-transform:uppercase;font-size:10px;border-left:3px solid #111;padding-left:6px}'+
+    'table{border-collapse:collapse;width:100%;margin-top:4px}th{border:1px solid #111;background:#eee;padding:4px 6px;font-size:9.5px}td{border:1px solid #444;padding:4px 6px;font-size:9.5px;vertical-align:top}td.c{text-align:center;font-weight:700;width:70px;white-space:nowrap}'+
+    '.foot{margin-top:14px;display:flex;justify-content:space-between;font-size:9px;color:#555;border-top:1px solid #999;padding-top:4px}'+
+    '</style></head><body>'+
+    '<h1>SOIL PROFILE DESCRIPTION SHEET</h1><div class="sub">FORMULIR DATA PROFIL TANAH — DOKUMEN LAPANGAN</div>'+
+    '<div class="cols"><div>'+ln("Pedon No",p.pedonNo)+ln("Simbol",p.simbol)+ln("Lokasi",p.lokasi)+ln("Elevasi",p.ketinggian?p.ketinggian+" m dpl":"")+ln("Lereng",p.kemiringan?p.kemiringan+" %":"")+ln("Vegetasi",p.vegetasi)+ln("Bahan Induk",p.bahanInduk)+ln("Drainase",p.drainase)+'</div>'+
+    '<div>'+ln("Tanggal",p.tanggal)+ln("Surveyor",p.surveyor)+ln("Kelembaban",p.kelembaban)+ln("Muka Air",p.mukaAir)+ln("Batuan",p.batuan)+ln("Erosi",p.erosi)+ln("Klasifikasi (USDA)",p.klasUsda)+'</div></div>'+
+    '<div class="sect">Land-form & Kondisi Situs</div><div class="cols"><div>'+ln("Posisi Fisiografis",fs.posisiFisiografis)+ln("Topografi Sekitar",fs.topografiSekitar)+ln("Mikrotopografi",fs.mikrotopografi)+ln("Kondisi Kelembaban",fs.kondisiKelembaban)+'</div>'+
+    '<div>'+ln("Batuan: Ukuran",fs.ukuranBatuan)+ln("Batuan: Proporsi",fs.proporsiBatuan)+ln("Singkapan Batuan",fs.singkapanBatuan)+ln("Salt/Alkali",fs.saltAlkali)+ln("Pengaruh Manusia",fs.pengaruhManusia)+'</div></div>'+
+    '<div class="sect">Horizons</div><table><thead><tr><th style="width:70px">Simbol</th><th style="width:100px">Kedalaman (cm)</th><th>Deskripsi</th></tr></thead><tbody>'+hzRows+'</tbody></table>'+
+    (p.catatan?'<div style="margin-top:8px"><b>Keterangan:</b> '+esc(p.catatan)+'</div>':"")+
+    '<div class="foot"><span>Formulir Deskripsi Profil</span><span>Dicetak: '+new Date().toLocaleString("id-ID")+'</span></div>'+
+    '<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>';
+  var w=window.open("","_blank");if(!w){toast("Popup diblokir.","err");return;}w.document.write(html);w.document.close();
+}
+</script>
+
+<script>
+/* ===== TAB: STATISTIK & AI DASHBOARD ===== */
+function viewStat(){
+  var recs=S.records;
+  var jenis={},pt={};
+  recs.forEach(function(r){
+    var j=(r.jenisTanah||"Tidak diklasifikasi").trim()||"Tidak diklasifikasi";jenis[j]=(jenis[j]||0)+1;
+    var p=(r.perusahaan||"Tanpa PT").trim()||"Tanpa PT";pt[p]=(pt[p]||0)+1;
+  });
+  var grp=S.statGroup||"jenis";
+  var data=grp==="jenis"?jenis:pt;
+  var entries=Object.keys(data).map(function(k){return {k:k,v:data[k]};}).sort(function(a,b){return b.v-a.v;});
+  var maxV=entries.reduce(function(m,e){return Math.max(m,e.v);},0)||1;
+  var palette=["#1b4d3e","#2e7d5b","#A65D37","#c98a4b","#5a7d6a","#8a9a5b","#425046","#7a5c3e"];
+
+  // Grafik batang SVG
+  var barH=26,gap=10,padL=140,padR=40,w=680,h=entries.length*(barH+gap)+20;
+  var bars=entries.map(function(e,i){
+    var bw=Math.round((w-padL-padR)*e.v/maxV);var y=10+i*(barH+gap);var c=palette[i%palette.length];
+    return '<text x="'+(padL-8)+'" y="'+(y+barH/2+4)+'" text-anchor="end" font-size="11" fill="#2D2D29">'+esc(e.k.length>20?e.k.slice(0,19)+"…":e.k)+'</text>'+
+      '<rect x="'+padL+'" y="'+y+'" width="'+bw+'" height="'+barH+'" rx="5" fill="'+c+'"/>'+
+      '<text x="'+(padL+bw+6)+'" y="'+(y+barH/2+4)+'" font-size="11" font-weight="700" fill="#1C241F">'+e.v+'</text>';
+  }).join("");
+  var chart=entries.length
+    ? '<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto">'+bars+'</svg>'
+    : '<div style="text-align:center;padding:40px 10px;color:#8f8f80"><div style="font-size:36px">📊</div><b>Tidak Ada Data Statistik</b><div class="hint" style="margin-top:6px">Tambahkan titik bor via tab Boring atau sinkronkan data.</div></div>';
+
+  // Sebaran (daftar + persentase)
+  var total=recs.length;
+  var sebaran=entries.map(function(e,i){
+    var pct=total?Math.round(e.v/total*100):0;var c=palette[i%palette.length];
+    return '<div style="margin-bottom:7px"><div class="row" style="justify-content:space-between;font-size:11px"><b>'+esc(e.k)+'</b><span>'+e.v+' ('+pct+'%)</span></div>'+
+      '<div style="height:7px;background:var(--krem2);border-radius:4px;overflow:hidden;margin-top:2px"><div style="height:100%;width:'+pct+'%;background:'+c+'"></div></div></div>';
+  }).join("")||'<div class="hint">Belum ada data.</div>';
+
+  return '<div class="card">'+
+    '<h3>📊 Ringkasan Statistik</h3><div class="sub">Analisis kuantitatif sebaran titik bor.</div>'+
+    '<div class="grid g2">'+
+      '<div class="card" style="margin:0;background:var(--krem)"><label class="lbl">Total Titik Bor</label><div style="font-size:30px;font-weight:800;color:var(--gelap)">'+total+'</div><div class="hint">Titik terdaftar</div></div>'+
+      '<div class="card" style="margin:0;background:var(--krem)"><label class="lbl">Jenis Tanah</label><div style="font-size:30px;font-weight:800;color:var(--gelap)">'+Object.keys(jenis).length+'</div><div class="hint">Klasifikasi</div></div>'+
+    '</div>'+
+    '<div class="card" style="margin:10px 0 0;background:var(--krem)"><label class="lbl">Perusahaan (PT)</label><div style="font-size:22px;font-weight:800;color:var(--gelap)">🏢 '+Object.keys(pt).length+' Perusahaan</div></div>'+
+    '<div class="sep"><label class="lbl">Filter / Grouping Grafik</label>'+
+    '<div class="row" style="background:var(--krem2);padding:4px;border-radius:12px;margin-top:4px">'+
+      '<button class="btn '+(grp==="jenis"?"btn-p":"btn-s")+'" style="flex:1;'+(grp==="jenis"?"":"background:none;border:none")+'" onclick="S.statGroup=\'jenis\';var m=$(\'#main\');if(m)m.innerHTML=viewStat()">Jenis Tanah</button>'+
+      '<button class="btn '+(grp==="pt"?"btn-p":"btn-s")+'" style="flex:1;'+(grp==="pt"?"":"background:none;border:none")+'" onclick="S.statGroup=\'pt\';var m=$(\'#main\');if(m)m.innerHTML=viewStat()">Perusahaan (PT)</button>'+
+    '</div></div>'+
+    '<div class="sep"><label class="lbl">Sebaran '+(grp==="jenis"?"Jenis Tanah":"Perusahaan")+'</label><div style="margin-top:6px">'+sebaran+'</div></div>'+
+  '</div>'+
+  '<div class="card"><h3>📈 Grafik Sebaran Titik Bor</h3><div class="sub">Dikelompokkan berdasarkan '+(grp==="jenis"?"Jenis Tanah":"Perusahaan")+'.</div>'+chart+'</div>'+
+  '<div class="card"><div class="row" style="justify-content:space-between"><h3>✨ AI & Pedological Insights</h3>'+
+    (total?'<button class="chip" id="aiBtn" onclick="genInsight()">Buat Analisis</button>':'')+'</div>'+
+    '<div class="sub">Interpretasi otomatis berdasarkan agregat sebaran data pemboran.</div>'+
+    '<div id="aiOut">'+(S.aiInsight?renderInsight(S.aiInsight):'<div class="hint">Tekan "Buat Analisis" untuk meringkas kondisi sebaran tanah dari data yang ada.</div>')+'</div>'+
+  '</div>';
+}
+
+function renderInsight(t){return '<div style="font-size:12px;line-height:1.7;white-space:pre-wrap;background:var(--krem);border:1px solid var(--garis);border-radius:10px;padding:12px">'+esc(t)+'</div>';}
+
+function genInsight(){
+  var recs=S.records;if(!recs.length){toast("Belum ada data.","err");return;}
+  var btn=$("#aiBtn");if(btn){btn.disabled=true;btn.textContent="Menganalisis…";}
+  // Agregat ringkas
+  var jenis={},pt={},drain={},fis={};var depths=[];
+  recs.forEach(function(r){
+    var j=(r.jenisTanah||"?").trim();jenis[j]=(jenis[j]||0)+1;
+    var p=(r.perusahaan||"?").trim();pt[p]=(pt[p]||0)+1;
+    if(r.drainase)drain[r.drainase]=(drain[r.drainase]||0)+1;
+    if(r.fisiografi)fis[r.fisiografi]=(fis[r.fisiografi]||0)+1;
+    if(r.kedalamanEfektif)depths.push(num(r.kedalamanEfektif));
+  });
+  function top(o){return Object.keys(o).sort(function(a,b){return o[b]-o[a];}).slice(0,3).map(function(k){return k+" ("+o[k]+")";}).join(", ");}
+  var avgD=depths.length?Math.round(depths.reduce(function(a,b){return a+b;},0)/depths.length):0;
+  var ringkas={totalTitik:recs.length,jenisTanahTeratas:top(jenis),ptTeratas:top(pt),drainaseUmum:top(drain),fisiografiUmum:top(fis),rataKedalamanEfektif:avgD};
+  call("analyzeSoil",{mode:"aggregate",summary:ringkas,records:recs.slice(0,40).map(function(r){return{borId:r.borId,jenisTanah:r.jenisTanah,fisiografi:r.fisiografi,drainase:r.drainase,kedalamanEfektif:r.kedalamanEfektif,klasifikasi:r.klasifikasi};})})
+  .then(function(res){
+    var txt=(res&&(res.analysis||res.text||res.result))||(typeof res==="string"?res:JSON.stringify(res));
+    S.aiInsight=txt;var out=$("#aiOut");if(out)out.innerHTML=renderInsight(txt);
+    if(btn){btn.disabled=false;btn.textContent="Perbarui Analisis";}
+  }).catch(function(e){
+    // fallback lokal bila API AI tidak tersedia
+    var txt="Ringkasan Otomatis (lokal):\n"+
+      "• Total "+ringkas.totalTitik+" titik bor terekam.\n"+
+      "• Jenis tanah dominan: "+(ringkas.jenisTanahTeratas||"-")+".\n"+
+      "• Fisiografi umum: "+(ringkas.fisiografiUmum||"-")+".\n"+
+      "• Drainase umum: "+(ringkas.drainaseUmum||"-")+".\n"+
+      "• Rata-rata kedalaman efektif: "+ringkas.rataKedalamanEfektif+" cm.\n\n"+
+      "Catatan: analisis AI penuh butuh GEMINI_API_KEY di Script Properties. ("+e.message+")";
+    S.aiInsight=txt;var out=$("#aiOut");if(out)out.innerHTML=renderInsight(txt);
+    if(btn){btn.disabled=false;btn.textContent="Buat Analisis";}
+  });
+}
+</script>
+
+<script>
+/* ===== MANAJEMEN PENGGUNA (admin) ===== */
+function _auth(){var ss=S.session||{};return {_authUser:ss.username||"",_authEmail:ss.email||""};}
+function loadUsers(){if(!S.ss)return;call("listUsers",S.ss,{username:(S.session&&S.session.username)||"",email:(S.session&&S.session.email)||""}).then(function(l){S.users=l||[];var m=$("#main");if(m&&S.tab==="sync")m.innerHTML=viewSync();}).catch(function(e){toast(e.message,"err");});}
+function saveUser(){
+  var uname=($("#uUser").value||"").trim().toLowerCase();
+  var editEmail=($("#uEmailEdit")&&$("#uEmailEdit").value||"").trim().toLowerCase();
+  if(!uname){toast("Username wajib diisi.","err");return;}
+  var u=Object.assign({
+    email: editEmail || (uname+"@local"),
+    nama:($("#uNama").value||"").trim()||uname,
+    role:$("#uRole").value,
+    allowedPt:($("#uPt").value||"").trim(),
+    noHp:($("#uHp").value||"").trim(),
+    username:uname,
+    password:($("#uPass").value||""),
+    aktif:$("#uAktif").checked
+  }, _auth());
+  call("upsertUser",S.ss,u).then(function(){toast("✅ Pengguna disimpan.","ok");["uNama","uUser","uPass","uPt","uHp","uEmailEdit"].forEach(function(id){var el=$("#"+id);if(el)el.value="";});if($("#uAktif"))$("#uAktif").checked=true;loadUsers();}).catch(function(e){toast(e.message,"err");});
+}
+function editUser(email){var u=(S.users||[]).filter(function(x){return x.email===email;})[0];if(!u)return;
+  if($("#uEmailEdit"))$("#uEmailEdit").value=u.email||"";
+  if($("#uNama"))$("#uNama").value=u.nama||"";
+  if($("#uUser"))$("#uUser").value=u.username||"";
+  if($("#uPass"))$("#uPass").value="";
+  if($("#uRole"))$("#uRole").value=u.role||"viewer";
+  if($("#uPt"))$("#uPt").value=u.allowedPt||"";
+  if($("#uHp"))$("#uHp").value=u.noHp||"";
+  if($("#uAktif"))$("#uAktif").checked=String(u.aktif||"YA").toUpperCase().indexOf("Y")===0;
+  window.scrollTo(0,0);toast("Mengedit "+(u.username||u.email)+". Kosongkan password bila tak diubah.","info");}
+function delUser(email){if(!confirm("Hapus pengguna "+email+"?"))return;call("deleteUser",S.ss,Object.assign({email:email},_auth())).then(function(){toast("Pengguna dihapus.","ok");loadUsers();}).catch(function(e){toast(e.message,"err");});}
+function resetDev(email){if(!confirm("Reset ikatan perangkat untuk "+email+"? Pengguna bisa login dari HP baru."))return;call("resetDevice",S.ss,email).then(function(){toast("Perangkat direset.","ok");}).catch(function(e){toast(e.message,"err");});}
+function showLog(){call("fetchActivityLog",S.ss,{username:(S.session&&S.session.username)||"",email:(S.session&&S.session.email)||""}).then(function(l){var rows=(l||[]).slice(0,30).map(function(x){return '<div style="font-size:10px;padding:4px 0;border-bottom:1px solid var(--krem2)"><b>'+esc(x.aksi||x.action||"")+'</b> · '+esc(x.email||"")+' · <span style="color:#8f8f80">'+esc(String(x.waktu||x.time||"").replace("T"," ").slice(0,16))+'</span></div>';}).join("");var o=$("#logOut");if(o)o.innerHTML='<div style="margin-top:8px;text-align:left;max-height:220px;overflow-y:auto">'+(rows||'<div class="hint">Log kosong.</div>')+'</div>';}).catch(function(e){toast(e.message,"err");});}
+
+/* ===== DRIVE + HORIZON RESYNC ===== */
+function makeDrive(){toast("Membuat folder…","info");call("createDriveFolder","QField Soil Boring GIS").then(function(r){S.driveFolder=r;toast("✅ Folder Drive dibuat.","ok");var m=$("#main");if(m)m.innerHTML=viewSync();}).catch(function(e){toast(e.message,"err");});}
+function resyncHz(){if(!S.ss)return;toast("Sinkron ulang horizon…","info");call("resyncAllHorizons",S.ss).then(function(){toast("✅ Horizon tersinkron ulang.","ok");}).catch(function(e){toast(e.message,"err");});}
+
+/* ===== QFIELD IMPORT ===== */
+function qfPick(input,kind){
+  if(kind==="foto"){S._qfFoto=input.files;var n=$("#qfFotoName");if(n)n.textContent=(input.files.length)+" foto dipilih";return;}
+  var f=input.files&&input.files[0];if(!f)return;
+  var fr=new FileReader();
+  fr.onload=function(){try{var gj=JSON.parse(fr.result);if(kind==="bor"){S._qfBor=gj;var n=$("#qfBorName");if(n)n.textContent=f.name;}else if(kind==="hz"){S._qfHz=gj;var n2=$("#qfHzName");if(n2)n2.textContent=f.name;}else if(kind==="profil"){S._qfProfil=gj;var n3=$("#qfProfilName");if(n3)n3.textContent=f.name;}var b=$("#qfBtn");if(b&&(S._qfBor||S._qfProfil))b.disabled=false;}catch(e){toast("GeoJSON tidak valid: "+e.message,"err");}};
+  fr.readAsText(f);
+}
+function qfProcess(){
+  if(!S._qfBor&&!S._qfProfil){toast("Pilih file GeoJSON titik bor atau profil.","err");return;}
+  var out=$("#qfOut");var feats=(S._qfBor&&S._qfBor.features)||[];
+  // Kelompokkan horizon dari file horizon by bor_id
+  var hzByBor={};
+  if(S._qfHz&&S._qfHz.features){S._qfHz.features.forEach(function(h){var pr=h.properties||{};var bid=pr.bor_id||pr.borId||pr.BOR_ID;if(!bid)return;
+    (hzByBor[bid]=hzByBor[bid]||[]).push({
+      depthFrom:num(pr.depth_from||pr.depthFrom),depthTo:num(pr.depth_to||pr.depthTo),
+      horizonName:pr.horizon||pr.horizonName||"",horizonSuffix:pr.sufiks||pr.suffix||"",
+      warnaMatrik:pr.warna_matrik||pr.warna||pr.warnaMatrik||"",
+      warnaMatrik_Hue:pr.matrik_hue||"",warnaMatrik_Value:pr.matrik_value||"",warnaMatrik_Chroma:pr.matrik_chroma||"",
+      warnaKaratan:pr.warna_karatan||"",warnaKaratan_Hue:pr.karatan_hue||"",warnaKaratan_Value:pr.karatan_value||"",warnaKaratan_Chroma:pr.karatan_chroma||"",
+      warnaCampuran:pr.warna_campuran||"",warnaCampuran_Hue:pr.campuran_hue||"",warnaCampuran_Value:pr.campuran_value||"",warnaCampuran_Chroma:pr.campuran_chroma||"",
+      texture:pr.tekstur||pr.texture||"",consistency:pr.konsistensi||pr.consistency||"",gravelPercent:pr.gravel||pr.gravel_pct||"",
+      pH_H2O:pr.ph_h2o||"",pH_H2O2:pr.ph_h2o2||"",pH_HCL:pr.ph_hcl||"",ec:pr.ec||"",tds:pr.tds||"",
+      keterangan:pr.keterangan||pr.notes||""});});}
+  var imported=0,errors=0;
+  var chain=Promise.resolve();
+  feats.forEach(function(ft){
+    var pr=ft.properties||{};var geom=ft.geometry||{};var coords=(geom.coordinates||[0,0]);
+    var bid=pr.bor_id||pr.borId||pr.BOR_ID||pr.id;if(!bid){errors++;return;}
+    var rec={id:"qf-"+bid+"-"+Date.now(),borId:String(bid),longitude:+coords[0]||0,latitude:+coords[1]||0,
+      surveyorName:pr.surveyor||pr.surveyorName||"",surveyDate:(pr.tanggal||pr.date||new Date().toISOString()).slice(0,10),
+      perusahaan:pr.pt||pr.perusahaan||"",kebun:pr.kebun||"",jenisTanah:pr.jenis_tanah||pr.jenisTanah||"",
+      fisiografi:pr.fisiografi||"",topografi:pr.topografi||"",drainase:pr.drainase||"",klasifikasi:pr.klasifikasi||"",
+      kedalamanEfektif:pr.kedalaman_efektif||pr.kedalamanEfektif||"",notes:pr.catatan||pr.notes||"",
+      horizons:hzByBor[bid]||[],syncStatus:"synced"};
+    chain=chain.then(function(){return call("appendSurveyToSheet",S.ss,rec).then(function(){imported++;S.records.unshift(rec);}).catch(function(){errors++;});});
+  });
+  // Impor PROFIL bila file profil GeoJSON dipilih
+  if(S._qfProfil&&S._qfProfil.features){
+    S._qfProfil.features.forEach(function(ft){
+      var pr=ft.properties||{};var g=ft.geometry||{};var co=g.coordinates||[0,0];
+      var pid=pr.pedon_no||pr.pedonNo||pr.profil_id;if(!pid)return;
+      var hzs=[];
+      // horizon profil bisa disematkan sbg JSON string di properti "horizons"
+      if(pr.horizons){try{hzs=JSON.parse(pr.horizons);}catch(e){}}
+      var rec={id:"qfp-"+pid+"-"+Date.now(),pedonNo:String(pid),simbol:pr.simbol||"",klasUsda:pr.klas_usda||pr.klasUsda||"",klasFao:pr.klas_fao||"",klasPpt:pr.klas_ppt||"",
+        lokasi:pr.lokasi||"",fisiografi:pr.fisiografi||"",ketinggian:pr.ketinggian||"",kemiringan:pr.kemiringan||"",vegetasi:pr.vegetasi||"",
+        bahanInduk:pr.bahan_induk||"",drainase:pr.drainase||"",kelembaban:pr.kelembaban||"",mukaAir:pr.muka_air||"",batuan:pr.batuan||"",erosi:pr.erosi||"",
+        surveyor:pr.surveyor||"",tanggal:(pr.tanggal||new Date().toISOString()).slice(0,10),catatan:pr.catatan||"",
+        latitude:+co[1]||0,longitude:+co[0]||0,horizons:hzs,labRows:[],fieldSheet:{},syncStatus:"synced"};
+      chain=chain.then(function(){return call("upsertProfilToSheet",S.ss,rec).then(function(){S.profils.unshift(rec);}).catch(function(){});});
+    });
+  }
+  if(out)out.textContent="Memproses "+feats.length+" fitur…";
+  chain.then(function(){return call("resyncAllHorizons",S.ss).catch(function(){});}).then(function(){
+    saveLocal();if(out)out.innerHTML='<span style="color:#065f46">✅ Impor selesai: '+imported+' titik berhasil'+(errors?", "+errors+" gagal/dilewati":"")+'.</span>';
+    toast("Impor QField selesai ("+imported+" titik).","ok");
+  });
+}
+
+/* ===== REKAP BULANAN ===== */
+function recapData(month){return S.records.filter(function(r){return (r.surveyDate||"").slice(0,7)===month;});}
+function recapCSV(){
+  var month=$("#recapMonth").value;var data=recapData(month);
+  if(!data.length){toast("Tidak ada data bulan itu.","err");return;}
+  var head=["Bor ID","Tanggal","Perusahaan","Kebun","Jenis Tanah","Fisiografi","Drainase","Kedalaman Efektif","Latitude","Longitude","Jml Horizon"];
+  var rows=data.map(function(r){return [r.borId,r.surveyDate,r.perusahaan,r.kebun,r.jenisTanah,r.fisiografi,r.drainase,r.kedalamanEfektif,r.latitude,r.longitude,(r.horizons||[]).length].map(function(v){return '"'+String(v==null?"":v).replace(/"/g,'""')+'"';}).join(",");});
+  var csv=head.join(",")+"\\n"+rows.join("\\n");
+  var blob=new Blob([csv],{type:"text/csv;charset=utf-8"});var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="rekap-"+month+".csv";a.click();
+  toast("CSV diunduh.","ok");
+}
+function recapPDF(){
+  var month=$("#recapMonth").value;var data=recapData(month);
+  if(!data.length){toast("Tidak ada data bulan itu.","err");return;}
+  var byPt={},byJenis={};data.forEach(function(r){var p=r.perusahaan||"Tanpa PT";byPt[p]=(byPt[p]||0)+1;var j=r.jenisTanah||"?";byJenis[j]=(byJenis[j]||0)+1;});
+  var rows=data.map(function(r){return '<tr><td>'+esc(r.borId)+'</td><td>'+esc(r.surveyDate)+'</td><td>'+esc(r.perusahaan||"-")+'</td><td>'+esc(r.jenisTanah||"-")+'</td><td style="text-align:center">'+((r.horizons||[]).length)+'</td></tr>';}).join("");
+  function sum(o){return Object.keys(o).map(function(k){return esc(k)+": "+o[k];}).join(" · ");}
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Rekap '+month+'</title><style>@page{size:A4 portrait;margin:15mm}body{font-family:Inter,Arial,sans-serif;font-size:11px}h1{font-size:15px;text-align:center;margin:0}.sub{text-align:center;color:#555;border-bottom:2px solid #1b4d3e;padding-bottom:6px;margin-bottom:10px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #555;padding:4px 6px;font-size:10px}th{background:#e8efe9}.box{background:#f4f7f5;border:1px solid #cbd5cf;border-radius:8px;padding:8px;margin:8px 0}</style></head><body>'+
+    '<h1>REKAPITULASI BULANAN EKSEKUTIF</h1><div class="sub">Periode: '+month+' · Total '+data.length+' titik bor</div>'+
+    '<div class="box"><b>Ringkasan per Perusahaan:</b> '+sum(byPt)+'<br/><b>Ringkasan per Jenis Tanah:</b> '+sum(byJenis)+'</div>'+
+    '<table><thead><tr><th>Bor ID</th><th>Tanggal</th><th>Perusahaan</th><th>Jenis Tanah</th><th>Horizon</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+    '<div style="margin-top:20px;text-align:right">Dicetak: '+new Date().toLocaleString("id-ID")+'</div>'+
+    '<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\\/script></body></html>';
+  var w=window.open("","_blank");if(!w){toast("Popup diblokir.","err");return;}w.document.write(html);w.document.close();
+}
+
+/* ===== CETAK GABUNGAN ===== */
+function printGabungan(){
+  var ids=Object.keys(S.sel||{}).filter(function(k){return S.sel[k];});
+  var recs=S.records.filter(function(r){return ids.indexOf(r.id)>=0;});
+  if(!recs.length){toast("Pilih minimal satu record.","err");return;}
+  var ori=$("#combOri").value||"portrait";
+  var pages=recs.map(function(r,idx){return borReportHTML(r,idx>0);}).join("");
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Laporan Gabungan ('+recs.length+')</title><style>@page{size:A4 '+ori+';margin:12mm}*{box-sizing:border-box}body{font-family:Inter,Arial,sans-serif;font-size:11px;color:#111;margin:0}'+borReportCSS()+'</style></head><body>'+pages+'<script>window.onload=function(){setTimeout(function(){window.print();},400);};<\\/script></body></html>';
+  var w=window.open("","_blank");if(!w){toast("Popup diblokir.","err");return;}w.document.write(html);w.document.close();
+}
+
+
+/* ===== SINKRONISASI DATA PENDING (offline → online) ===== */
+function pendingCount(){return (S.records||[]).filter(function(r){return r.syncStatus!=="synced";}).length+(S.profils||[]).filter(function(r){return r.syncStatus&&r.syncStatus!=="synced";}).length;}
+function syncPending(){
+  if(!navigator.onLine||!S.ss)return;
+  var pend=(S.records||[]).filter(function(r){return r.syncStatus!=="synced";});
+  if(!pend.length){return;}
+  toast("Menyinkron "+pend.length+" data lokal…","info");
+  var done=0,fail=0;
+  var chain=Promise.resolve();
+  pend.forEach(function(rec){
+    chain=chain.then(function(){
+      // upload foto base64 dulu bila ada
+      var fotos=(rec.fotos||[]).slice();
+      var needUp=fotos.some(function(d){return /^data:/.test(d);});
+      var up=needUp?call("savePhotos",S.ss,fotos).then(function(r){return (r&&r.urls)||fotos;}).catch(function(){return fotos;}):Promise.resolve(fotos);
+      return up.then(function(urls){
+        rec.fotos=urls;rec.foto=JSON.stringify(urls);rec._pendingPhotos=false;
+        var op=rec.googleSheetRowIndex?call("updateSurveyInSheet",S.ss,rec,rec.googleSheetRowIndex):call("appendSurveyToSheet",S.ss,rec);
+        return op.then(function(res){
+          rec.syncStatus="synced";
+          if(typeof res==="number"&&res>0)rec.googleSheetRowIndex=res;
+          done++;
+        });
+      }).catch(function(e){ if(isOffline(e))throw e; fail++; });
+    });
+  });
+  chain.then(function(){return call("resyncAllHorizons",S.ss).catch(function(){});}).then(function(){
+    saveLocal();
+    if(done)toast("✅ "+done+" data lokal tersinkron"+(fail?", "+fail+" gagal":"")+".","ok");
+    var m=$("#main");if(m&&(S.tab==="db"||S.tab==="sync"))m.innerHTML=viewFor(S.tab);
+  }).catch(function(){ /* masih offline, biarkan pending */ });
+}
+
+/* Pantau status koneksi: auto-sync saat kembali online */
+window.addEventListener("online",function(){S.online=true;toast("Kembali online — menyinkron data…","ok");syncPending();var b=$("#netBadge");if(b)b.remove();});
+window.addEventListener("offline",function(){S.online=false;toast("Mode offline — data disimpan lokal.","info");});
+
+/* ===== NAV: tambah Statistik ===== */
+function viewFor(t){
+  if(t==="form")return viewForm();
+  if(t==="profil")return viewProfil();
+  if(t==="db")return viewDb();
+  if(t==="map")return viewMap();
+  if(t==="stat")return viewStat();
+  if(t==="sync")return viewSync();
+  return "";
+}
+</script>
+
+<script>
+/* ===== LAYAR LOGIN USERNAME/PASSWORD (offline-first, seperti GeoUkur) ===== */
+/* Sesi disimpan di localStorage → aplikasi bisa dibuka OFFLINE tanpa server.  */
+
+function loadSession(){try{var s=localStorage.getItem("ss_session");if(s)S.session=JSON.parse(s);var ss=localStorage.getItem("ss_ssid");if(ss)S.ss=ss;}catch(e){}}
+function saveSession(){try{if(S.session)localStorage.setItem("ss_session",JSON.stringify(S.session));if(S.ss)localStorage.setItem("ss_ssid",S.ss);}catch(e){}}
+function clearSession(){try{localStorage.removeItem("ss_session");}catch(e){}}
+
+function viewLogin(msg,mode){
+  var connected=!!S.ss;
+  return '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(160deg,#1C241F,#2e3d33)">'+
+    '<div style="width:100%;max-width:380px;background:var(--krem);border-radius:20px;padding:24px;box-shadow:0 12px 40px rgba(0,0,0,.3)">'+
+      '<div style="text-align:center;margin-bottom:18px"><div style="font-size:40px">🌏</div><h2 style="margin:6px 0 2px;font-size:19px;color:var(--gelap)">Soil Survey GIS</h2><div style="font-size:11px;color:var(--redup)">Database Survei & Profil Tanah</div></div>'+
+      (msg?'<div class="msg '+(mode||"info")+'" style="display:block">'+esc(msg)+'</div>':'')+
+      (!connected?
+        '<label class="lbl">ID / URL Spreadsheet Database</label><input class="in" id="loginSheet" placeholder="https://docs.google.com/…/edit"/>'+
+        '<button class="btn btn-p btn-full" style="margin-top:10px" onclick="loginConnectSheet()">🔗 Hubungkan Database</button>'+
+        '<div class="hint" style="margin-top:8px;text-align:center">Admin pertama? <a href="#" onclick="loginCreate();return false">Buat database baru</a></div>'
+        :
+        (S._firstAdmin?
+          '<div class="msg info" style="display:block">Buat akun admin pertama untuk database ini:</div>'+
+          '<label class="lbl">Nama Lengkap</label><input class="in" id="faNama" placeholder="Nama admin"/>'+
+          '<label class="lbl" style="margin-top:8px">Username</label><input class="in" id="faUser" placeholder="username" autocapitalize="off" autocorrect="off"/>'+
+          '<label class="lbl" style="margin-top:8px">Password (min. 4)</label><input class="in" id="faPass" type="password" placeholder="\u2022\u2022\u2022\u2022\u2022\u2022"/>'+
+          '<button class="btn btn-p btn-full" style="margin-top:12px" onclick="doCreateAdmin()">\ud83d\udc51 Buat Admin & Masuk</button>'+
+          '<div class="row" style="justify-content:center;margin-top:10px"><a href="#" onclick="S._firstAdmin=false;showLogin();return false" style="font-size:11px;color:var(--redup)">Sudah punya akun? Login</a></div>'
+          :
+          '<label class="lbl">Username</label><input class="in" id="loginUser" placeholder="username" autocapitalize="off" autocorrect="off"/>'+
+          '<label class="lbl" style="margin-top:8px">Password</label><input class="in" id="loginPass" type="password" placeholder="\u2022\u2022\u2022\u2022\u2022\u2022" onkeydown="if(event.keyCode===13)doLogin()"/>'+
+          '<button class="btn btn-p btn-full" style="margin-top:12px" onclick="doLogin()">🔓 Masuk</button>'+
+          '<div class="row" style="justify-content:space-between;margin-top:10px">'+
+            '<a href="#" onclick="loginSwitch();return false" style="font-size:11px;color:var(--redup)">Ganti database</a>'+
+            '<a href="#" onclick="S._firstAdmin=true;showLogin();return false" style="font-size:11px;font-weight:700;color:var(--hijau)">Buat admin pertama</a>'+
+            (navigator.onLine?'':'<span style="font-size:11px;color:#b45309">\u25cf Mode Offline</span>')+
+          '</div>'
+        )
+      )+
+      '<div style="text-align:center;font-size:10px;color:#8f8f80;margin-top:16px">Login offline tersedia setelah pernah masuk online.</div>'+
+    '</div>'+
+  '</div>';
+}
+function showLogin(msg,mode){S._gate=true;$("#app").innerHTML=viewLogin(msg,mode);}
+
+function loginConnectSheet(){
+  var raw=($("#loginSheet").value||"").trim();if(!raw){toast("Tempel ID/URL spreadsheet.","err");return;}
+  var m=raw.match(/\/d\/([a-zA-Z0-9-_]+)/);S.ss=m?m[1]:raw;saveSession();
+  // daftarkan workspace (best-effort), lalu tampilkan form login username
+  call("setActiveWorkspace",{spreadsheetId:S.ss,spreadsheetUrl:"https://docs.google.com/spreadsheets/d/"+S.ss+"/edit"}).catch(function(){}).then(function(){
+    return call("needsFirstAdmin",S.ss).catch(function(){return{needs:false};});
+  }).then(function(r){ S._firstAdmin=!!(r&&r.needs); showLogin(S._firstAdmin?"":"Database terhubung. Silakan login.", S._firstAdmin?"info":"ok"); });
+}
+function loginCreate(){
+  toast("Membuat database…","info");
+  call("createSoilSurveySpreadsheet","Database Titik Bor").then(function(r){
+    S.ss=r.id;saveSession();
+    return call("setActiveWorkspace",{spreadsheetId:r.id,spreadsheetUrl:r.url}).catch(function(){});
+  }).then(function(){
+    S._firstAdmin=true; showLogin("Database dibuat. Buat akun admin pertama Anda.","ok");
+  }).catch(function(e){showLogin("Gagal buat: "+e.message,"err");});
+}
+function loginSwitch(){S.ss="";try{localStorage.removeItem("ss_ssid");}catch(e){}showLogin();}
+
+function doCreateAdmin(){
+  var nama=($("#faNama").value||"").trim();
+  var u=($("#faUser").value||"").trim().toLowerCase();
+  var p=($("#faPass").value||"");
+  if(!u||!p){toast("Isi username & password.","err");return;}
+  if(p.length<4){toast("Password minimal 4 karakter.","err");return;}
+  if(!navigator.onLine){toast("Perlu online untuk membuat admin pertama.","err");return;}
+  var btn=event&&event.target;if(btn){btn.disabled=true;btn.textContent="Membuat…";}
+  call("createFirstAdmin",S.ss,{username:u,password:p,nama:nama}).then(function(sess){
+    if(!sess||!sess.ok)throw new Error("Gagal membuat admin.");
+    sess._h=hashLite(p);S.session=sess;S._firstAdmin=false;saveSession();
+    toast("Admin pertama dibuat.","ok");enterApp();
+  }).catch(function(e){ if(btn){btn.disabled=false;btn.textContent="Buat Admin & Masuk";} var m=e.message||"Gagal."; if(/tidak dikenal|is not a function|not defined/i.test(m)){m="Backend belum diperbarui. Ganti Code.gs dengan versi terbaru lalu Deploy > New version.";} showLogin(m,"err"); });
+}
+function doLogin(){
+  var u=($("#loginUser").value||"").trim().toLowerCase();
+  var p=($("#loginPass").value||"");
+  if(!u||!p){toast("Isi username & password.","err");return;}
+  // OFFLINE: verifikasi dgn sesi tersimpan (hash lokal) bila ada
+  if(!navigator.onLine){
+    if(S.session&&S.session.username===u&&S.session._h&&S.session._h===hashLite(p)){enterApp();return;}
+    showLogin("Offline: hanya bisa login dgn akun terakhir yang pernah online di perangkat ini.","err");return;
+  }
+  var btn=event&&event.target;if(btn){btn.disabled=true;btn.textContent="Memeriksa…";}
+  call("loginUsername",S.ss,{username:u,password:p}).then(function(sess){
+    if(!sess||!sess.ok){throw new Error("Login gagal.");}
+    sess._h=hashLite(p); // simpan verifier ringan utk login offline berikutnya
+    S.session=sess;saveSession();enterApp();
+  }).catch(function(e){
+    if(btn){btn.disabled=false;btn.textContent="🔓 Masuk";}
+    showLogin(e.message||"Login gagal.","err");
+  });
+}
+// hash ringan (non-kriptografis) hanya utk verifikasi login OFFLINE lokal
+function hashLite(s){var h=5381;for(var i=0;i<s.length;i++){h=((h<<5)+h)+s.charCodeAt(i);h=h&h;}return "h"+(h>>>0).toString(36);}
+
+function logout(){
+  if(!confirm("Keluar dari aplikasi?"))return;
+  clearSession();S.session=null;S._gate=true;
+  showLogin("Anda telah keluar.","info");
+}
+function enterApp(){S._gate=false;S.tab="form";saveSession();boot2();syncPending();}
+try{window.saveSession=saveSession;window.S=S;}catch(e){}
+
+</script>
+
+<!-- ============================================================
+     LAPISAN FITUR TAMBAHAN — Profil, Tanda Tangan, Kolaborasi
+     Berjalan berdampingan dengan aplikasi utama (tidak mengubahnya).
+     ============================================================ -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  #jx-fab{position:fixed;right:16px;bottom:96px;z-index:4000;width:52px;height:52px;border-radius:50%;
+    background:#1b4d3e;color:#fff;border:2px solid #fff;box-shadow:0 4px 14px rgba(0,0,0,.3);
+    font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  @media(min-width:769px){#jx-fab{bottom:24px}}
+  #jx-fab .jx-dot{position:absolute;top:-2px;right:-2px;width:14px;height:14px;border-radius:50%;
+    background:#A3E635;border:2px solid #1b4d3e;display:none}
+  #jx-fab.jx-live .jx-dot{display:block;animation:jxpulse 1.4s infinite}
+  @keyframes jxpulse{0%,100%{opacity:1}50%{opacity:.35}}
+  #jx-modal{position:fixed;inset:0;z-index:4001;background:rgba(28,36,31,.55);display:none;
+    align-items:flex-end;justify-content:center}
+  @media(min-width:769px){#jx-modal{align-items:center}}
+  #jx-panel{background:#FDFDF9;width:100%;max-width:560px;max-height:88vh;overflow-y:auto;
+    border-radius:18px 18px 0 0;padding:16px;font-family:Inter,system-ui,sans-serif;color:#2D2D29}
+  @media(min-width:769px){#jx-panel{border-radius:18px}}
+  .jx-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .jx-head h3{margin:0;font-size:15px;font-weight:800;color:#1C241F}
+  .jx-x{background:none;border:none;font-size:22px;cursor:pointer;color:#6B6B5F;line-height:1}
+  .jx-tabs{display:flex;gap:6px;background:#EAEAE2;padding:4px;border-radius:12px;margin-bottom:12px}
+  .jx-tabs button{flex:1;padding:8px 4px;border:none;background:none;border-radius:9px;font-size:11px;
+    font-weight:700;color:#55554E;cursor:pointer}
+  .jx-tabs button.on{background:#425046;color:#fff}
+  .jx-sec{display:none}.jx-sec.on{display:block}
+  .jx-lbl{display:block;font-size:9px;font-weight:800;color:#666;margin:8px 0 3px;letter-spacing:.4px}
+  .jx-in{width:100%;font-size:16px;background:#fff;border:1px solid #D5D5CD;border-radius:10px;
+    padding:9px 10px;outline:none;box-sizing:border-box}
+  .jx-btn{width:100%;padding:11px;border:none;border-radius:12px;background:#1b4d3e;color:#fff;
+    font-size:13px;font-weight:800;cursor:pointer;margin-top:10px}
+  .jx-btn.sec{background:#fff;color:#5A5A40;border:1px solid #D5D5CD}
+  .jx-btn:disabled{opacity:.5}
+  .jx-row{display:flex;gap:8px;align-items:center}
+  .jx-av{width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid #1b4d3e;background:#EAEAE2}
+  .jx-msg{font-size:11px;padding:8px 10px;border-radius:10px;margin-top:8px;display:none}
+  .jx-msg.ok{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;display:block}
+  .jx-msg.err{background:#fef2f2;color:#991b1b;border:1px solid #fecaca;display:block}
+  #jx-pad{width:100%;height:180px;background:#fff;border:2px dashed #D5D5CD;border-radius:12px;touch-action:none}
+  #jx-map{width:100%;height:300px;border-radius:12px;border:1px solid #D5D5CD;margin-top:8px}
+  .jx-avmark{border-radius:50%;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4);object-fit:cover;background:#425046}
+  .jx-lst{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+  .jx-card{background:#fff;border:1px solid #D5D5CD;border-radius:10px;padding:8px;display:flex;gap:8px;align-items:center;font-size:11px}
+  .jx-note{font-size:10px;color:#6B6B5F;line-height:1.5;margin-top:6px}
+</style>
+
+<button id="jx-fab" title="Profil, Tanda Tangan, Kolaborasi & Obrolan">👥<span class="jx-dot"></span><span id="jx-chatbadge" style="display:none;position:absolute;top:-4px;left:-4px;min-width:16px;height:16px;padding:0 3px;border-radius:8px;background:#ef4444;color:#fff;font:700 9px/16px sans-serif;text-align:center;align-items:center;justify-content:center"></span></button>
+<div id="jx-modal">
+  <div id="jx-panel">
+    <div class="jx-head">
+      <h3 id="jx-title">Profil & Kolaborasi</h3>
+      <button class="jx-x" id="jx-close">×</button>
+    </div>
+    <div class="jx-tabs">
+      <button data-s="profil" class="on">👤 Profil Saya</button>
+      <button data-s="ttd">✍️ Tanda Tangan</button>
+      <button data-s="kolab">🛰️ Kolaborasi</button>
+      <button data-s="chat">💬 Obrolan</button>
+    </div>
+
+    <!-- PROFIL -->
+    <div class="jx-sec on" data-s="profil">
+      <div class="jx-row">
+        <div id="jx-fotowrap" class="jx-av" style="display:flex;align-items:center;justify-content:center;font-size:26px;color:#888">👤</div>
+        <img id="jx-foto" class="jx-av" alt="Foto profil" style="display:none;cursor:zoom-in" onclick="if(window.lbOpen&&this.src)lbOpen(this.src,'Foto Profil Saya')" />
+        <div style="flex:1">
+          <div id="jx-ident" style="font-size:12px;font-weight:800;color:#1C241F">Memuat…</div>
+          <div id="jx-role" style="font-size:10px;color:#6B6B5F"></div>
+          <label class="jx-btn sec" style="margin-top:6px;text-align:center;padding:7px;font-size:11px;display:block">
+            Pilih / Ambil Foto
+            <input type="file" accept="image/*" id="jx-fotoin" style="display:none" />
+          </label>
+        </div>
+      </div>
+      <label class="jx-lbl">NAMA TAMPILAN</label>
+      <input class="jx-in" id="jx-nama" placeholder="Nama lengkap" />
+      <label class="jx-lbl">JABATAN (tercetak di laporan)</label>
+      <input class="jx-in" id="jx-jabatan" placeholder="Surveyor Tanah / Asisten Kebun" />
+      <button class="jx-btn" id="jx-simpanprofil">Simpan Profil</button>
+      <div class="jx-msg" id="jx-msg-p"></div>
+      <div class="jx-note">Foto dikompres otomatis (≤256px) agar muat di Google Sheets. Foto ini juga dipakai sebagai penanda Anda di peta kolaborasi.</div>
+    </div>
+
+    <!-- TANDA TANGAN -->
+    <div class="jx-sec" data-s="ttd">
+      <div class="jx-note" style="margin-bottom:6px">Tanda tangan di kotak bawah memakai jari (HP) atau mouse. TTD tersimpan akan <b>otomatis muncul di laporan PDF</b> yang Anda cetak.</div>
+      <canvas id="jx-pad"></canvas>
+      <div class="jx-row" style="margin-top:8px">
+        <button class="jx-btn sec" id="jx-hapuspad" style="margin-top:0">Bersihkan</button>
+        <button class="jx-btn" id="jx-simpanttd" style="margin-top:0">Simpan Tanda Tangan</button>
+      </div>
+      <div class="jx-msg" id="jx-msg-t"></div>
+      <div id="jx-ttdnow" style="margin-top:10px"></div>
+    </div>
+
+    <!-- KOLABORASI -->
+    <div class="jx-sec" data-s="kolab">
+      <div class="jx-note">Bagikan posisi GPS Anda agar rekan surveyor melihat lokasi Anda di peta, dan sebaliknya. Berguna agar tim tidak mengambil titik yang sama / saling tumpang tindih.</div>
+      <div class="jx-row" style="margin-top:8px">
+        <select class="jx-in" id="jx-interval" style="flex:1">
+          <option value="15">Perbarui tiap 15 detik</option>
+          <option value="30" selected>Perbarui tiap 30 detik</option>
+          <option value="60">Perbarui tiap 1 menit</option>
+          <option value="300">Perbarui tiap 5 menit</option>
+        </select>
+        <button class="jx-btn" id="jx-toggle" style="margin-top:0;width:auto;padding:11px 14px">Mulai Berbagi</button>
+      </div>
+      <div class="jx-msg" id="jx-msg-k"></div>
+      <div id="jx-map"></div>
+      <div class="jx-lst" id="jx-rekan"></div>
+    </div>
+
+    <!-- OBROLAN TIM -->
+    <div class="jx-sec" data-s="chat">
+      <div class="jx-note">Obrolan tim (ruang umum). Ketik pesan, atau lampirkan koordinat GPS Anda saat ini agar rekan bisa mengetuk untuk melompat ke lokasi di peta kolaborasi.</div>
+      <div id="jx-chatlist" style="height:300px;overflow-y:auto;background:#fff;border:1px solid #D5D5CD;border-radius:12px;padding:8px;margin-top:8px;display:flex;flex-direction:column;gap:6px"></div>
+      <label class="jx-row" style="margin-top:8px;font-size:10px;font-weight:700;color:#5A5A40;gap:5px;cursor:pointer">
+        <input type="checkbox" id="jx-lampirgps" style="width:auto"/> Lampirkan koordinat GPS saya
+      </label>
+      <div class="jx-row" style="margin-top:6px">
+        <input class="jx-in" id="jx-chatin" placeholder="Tulis pesan…" style="flex:1" />
+        <button class="jx-btn" id="jx-chatsend" style="margin-top:0;width:auto;padding:11px 16px">Kirim</button>
+      </div>
+      <div class="jx-msg" id="jx-msg-c"></div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function () {
+  "use strict";
+  var SS = null;            // spreadsheetId
+  var ME = null;            // sesi pengguna
+  var MYTTD = "";           // dataURL TTD personal
+  var timer = null, map = null, layer = null, watchId = null;
+  var DEV = localStorage.getItem("jx_device") || ("dev-" + Math.random().toString(36).slice(2, 9));
+  localStorage.setItem("jx_device", DEV);
+
+  function $(id) { return document.getElementById(id); }
+  function msg(el, text, ok) {
+    var e = $(el); e.textContent = text; e.className = "jx-msg " + (ok ? "ok" : "err");
+    setTimeout(function () { e.className = "jx-msg"; }, 5000);
+  }
+
+  // Panggil server: dukung google.script.run maupun mode PWA (fetch)
+  function call(fn) {
+    var args = [].slice.call(arguments, 1);
+    return new Promise(function (res, rej) {
+      var api = window.__API_URL__;
+      if (window.google && google.script && google.script.run) {
+        var jsonArgs = args.map(function (a) { return JSON.stringify(a === undefined ? null : a); });
+        google.script.run.withSuccessHandler(function (r) {
+          try { res(r ? JSON.parse(r) : null); } catch (e) { res(r); }
+        }).withFailureHandler(function (e) { rej(new Error(e && e.message ? e.message : String(e))); })[fn].apply(null, jsonArgs);
+      } else if (api) {
+        fetch(api, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ fn: fn, args: args }) })
+          .then(function (r) { return r.text(); })
+          .then(function (t) {
+            var env = JSON.parse(t);
+            if (!env.ok) throw new Error(env.error || "Gagal");
+            var d = env.data;
+            res(typeof d === "string" && d ? JSON.parse(d) : d);
+          }).catch(rej);
+      } else rej(new Error("Backend tidak tersedia."));
+    });
+  }
+
+  // Kompres gambar ke ≤ maxPx, JPEG
+  function compress(file, maxPx, quality) {
+    return new Promise(function (res, rej) {
+      var fr = new FileReader();
+      fr.onload = function () {
+        var img = new Image();
+        img.onload = function () {
+          var w = img.width, h = img.height, sc = Math.min(1, maxPx / Math.max(w, h));
+          var c = document.createElement("canvas");
+          c.width = Math.round(w * sc); c.height = Math.round(h * sc);
+          c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+          res(c.toDataURL("image/jpeg", quality || 0.8));
+        };
+        img.onerror = rej; img.src = fr.result;
+      };
+      fr.onerror = rej; fr.readAsDataURL(file);
+    });
+  }
+
+  /* ---------- Inisialisasi: ambil spreadsheet aktif + sesi ---------- */
+  function boot() {
+    call("getActiveWorkspace").then(function (ws) {
+      SS = (ws && ws.spreadsheetId) || "";
+      if (!SS) {
+        try { SS = (JSON.parse(localStorage.getItem("soil_survey_sync_config") || "{}").spreadsheetId) || ""; } catch (e) {}
+      }
+      // Utamakan sesi aplikasi (login username/password); fallback getSessionInfo.
+      var appSess = (window.S && window.S.session) ? window.S.session : null;
+      if (appSess && appSess.username) { return Promise.resolve(appSess); }
+      return call("getSessionInfo", SS || "").catch(function(){ return appSess || {}; });
+    }).then(function (s) {
+      ME = s || (window.S && window.S.session) || {};
+      $("jx-ident").textContent = (ME.name || "Pengguna") + (ME.email ? " · " + ME.email : "");
+      $("jx-role").textContent = "Peran: " + String(ME.role || "-").toUpperCase() +
+        (ME.allowedPt && ME.allowedPt.length ? " · PT: " + ME.allowedPt.join(", ") : " · semua PT");
+      $("jx-nama").value = ME.name || "";
+      $("jx-jabatan").value = ME.jabatan || "";
+      if (ME.foto) setFoto(ME.foto);
+      if (SS) loadMyTtd();
+    }).catch(function (e) { $("jx-ident").textContent = "Gagal memuat sesi: " + e.message; });
+  }
+
+  function loadMyTtd() {
+    call("fetchSignatures", SS, { personalOnly: true }).then(function (list) {
+      var mine = (list || [])[0];
+      MYTTD = mine ? mine.ttd : "";
+      $("jx-ttdnow").innerHTML = MYTTD
+        ? '<div class="jx-note">Tanda tangan tersimpan:</div><img src="' + MYTTD + '" style="max-width:200px;max-height:90px;object-fit:contain;border:1px solid #D5D5CD;border-radius:8px;background:#fff;margin-top:4px;padding:4px" onerror="this.parentNode.innerHTML=\'<div class=&quot;jx-note&quot;>Tanda tangan tersimpan tapi gagal ditampilkan. Silakan tanda tangan & simpan ulang.</div>\'"/>'
+        : '<div class="jx-note">Belum ada tanda tangan tersimpan.</div>';
+    }).catch(function () {});
+  }
+
+  /* ---------- PROFIL ---------- */
+  // Tampilkan foto (dan sembunyikan placeholder)
+  function setFoto(d) {
+    $("jx-foto").src = d;
+    $("jx-foto").style.display = "block";
+    $("jx-fotowrap").style.display = "none";
+  }
+  function fotoSaatIni() {
+    return ($("jx-foto").style.display === "none") ? "" : ($("jx-foto").getAttribute("src") || "");
+  }
+  $("jx-fotoin").addEventListener("change", function (e) {
+    var f = e.target.files && e.target.files[0]; if (!f) return;
+    compress(f, 256, 0.82).then(setFoto);
+    e.target.value = "";
+  });
+  $("jx-simpanprofil").addEventListener("click", function () {
+    if (!SS) { msg("jx-msg-p", "Spreadsheet belum terhubung.", false); return; }
+    var foto = fotoSaatIni();
+    var btn = this; btn.disabled = true;
+    call("updateMyProfile", SS, { username: (ME && ME.username) || "", email: (ME && ME.email) || "", nama: $("jx-nama").value, jabatan: $("jx-jabatan").value, foto: foto })
+      .then(function (r) {
+        var savedFoto = (r && r.foto) ? r.foto : foto;
+        if (savedFoto && savedFoto !== foto) setFoto(savedFoto);
+        msg("jx-msg-p", "\u2705 Profil tersimpan.", true);
+        if (ME) { ME.foto = savedFoto; ME.jabatan = $("jx-jabatan").value; ME.name = $("jx-nama").value; }
+        // sinkronkan ke sesi aplikasi juga
+        try { if (window.S && window.S.session) { window.S.session.foto = savedFoto; window.S.session.name = ME.name; window.S.session.jabatan = ME.jabatan; if (window.saveSession) window.saveSession(); } } catch(e){}
+      })
+      .catch(function (e) { msg("jx-msg-p", e.message, false); })
+      .then(function () { btn.disabled = false; });
+  });
+
+  /* ---------- TANDA TANGAN (kanvas) ---------- */
+  var pad = $("jx-pad"), ctx = null, drawing = false, dirty = false;
+  function padInit() {
+    var r = pad.getBoundingClientRect();
+    if (!r.width || !r.height) { return false; } // belum terlihat → jangan set ukuran 0
+    var dpr = window.devicePixelRatio || 1;
+    pad.width = Math.round(r.width * dpr); pad.height = Math.round(r.height * dpr);
+    ctx = pad.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.lineWidth = 2.4; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#111";
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, r.width, r.height);
+    return true;
+  }
+  function pt(e) {
+    var r = pad.getBoundingClientRect();
+    var t = e.touches ? e.touches[0] : e;
+    return { x: t.clientX - r.left, y: t.clientY - r.top };
+  }
+  function down(e) { if (!ctx) { if (!padInit()) return; } e.preventDefault(); drawing = true; dirty = true; var p = pt(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); }
+  function move(e) { if (!drawing) return; e.preventDefault(); var p = pt(e); ctx.lineTo(p.x, p.y); ctx.stroke(); }
+  function up() { drawing = false; }
+  pad.addEventListener("mousedown", down); pad.addEventListener("mousemove", move);
+  window.addEventListener("mouseup", up);
+  pad.addEventListener("touchstart", down, { passive: false });
+  pad.addEventListener("touchmove", move, { passive: false });
+  pad.addEventListener("touchend", up);
+
+  $("jx-hapuspad").addEventListener("click", function () { if (ctx) { var r = pad.getBoundingClientRect(); ctx.clearRect(0, 0, pad.width, pad.height); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, r.width, r.height); } dirty = false; });
+  $("jx-simpanttd").addEventListener("click", function () {
+    if (!SS) { msg("jx-msg-t", "Spreadsheet belum terhubung.", false); return; }
+    if (!ctx) { if (!padInit()) { msg("jx-msg-t", "Kanvas belum siap, coba lagi.", false); return; } }
+    if (!dirty) { msg("jx-msg-t", "Bubuhkan tanda tangan dahulu.", false); return; }
+    // Ekspor sebagai JPEG (latar putih) agar ukuran kecil & pasti valid
+    var d = pad.toDataURL("image/jpeg", 0.85);
+    if (!d || d.length < 2000) { msg("jx-msg-t", "Goresan belum terbaca. Coba tanda tangan lagi lebih tebal.", false); return; }
+    var btn = this; btn.disabled = true;
+    call("saveSignature", SS, { jenis: "personal", ttd: d, username: (ME && ME.username) || "", email: (ME && ME.email) || "", nama: $("jx-nama").value, jabatan: $("jx-jabatan").value })
+      .then(function () { MYTTD = d; msg("jx-msg-t", "✅ Tanda tangan tersimpan & akan tercetak di laporan Anda.", true); loadMyTtd(); })
+      .catch(function (e) { msg("jx-msg-t", e.message, false); })
+      .then(function () { btn.disabled = false; });
+  });
+
+  /* ---------- KOLABORASI ---------- */
+  function mapInit() {
+    if (map || !window.L) return;
+    map = L.map("jx-map", { zoomControl: true }).setView([-2.5, 118], 5);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
+    layer = L.layerGroup().addTo(map);
+    setTimeout(function () { map.invalidateSize(); }, 200);
+  }
+  function avatarIcon(foto, nama, own) {
+    var img = foto
+      ? '<img src="' + foto + '" class="jx-avmark" style="width:34px;height:34px;border-color:' + (own ? "#A3E635" : "#fff") + '"/>'
+      : '<div class="jx-avmark" style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;color:#fff;font:700 13px sans-serif;border-color:' + (own ? "#A3E635" : "#fff") + '">' +
+        String(nama || "?").charAt(0).toUpperCase() + "</div>";
+    return L.divIcon({ className: "", html: img, iconSize: [34, 34], iconAnchor: [17, 17], popupAnchor: [0, -18] });
+  }
+  function refreshRekan() {
+    if (!SS) return;
+    call("getLivePositions", SS).then(function (list) {
+      list = list || [];
+      if (!layer) return;
+      layer.clearLayers();
+      var bounds = [];
+      var html = "";
+      list.forEach(function (p) {
+        if (!p.lat || !p.lng) return;
+        var own = ME && p.email === ME.email;
+        if (p.akurasi) L.circle([p.lat, p.lng], { radius: p.akurasi, color: own ? "#A3E635" : "#3b82f6", weight: 1, fillOpacity: .08 }).addTo(layer);
+        L.marker([p.lat, p.lng], { icon: avatarIcon(p.foto, p.nama, own) })
+          .bindPopup('<div style="font-size:12px;line-height:1.5">' +
+            (p.foto ? '<img src="' + p.foto + '" style="width:56px;height:56px;border-radius:50%;object-fit:cover;display:block;margin-bottom:5px"/>' : "") +
+            "<b>" + (p.nama || p.email) + "</b>" + (own ? " (Anda)" : "") + "<br/>" +
+            '<span style="color:#666">' + p.email + "</span><br/>" +
+            (p.akurasi ? "Akurasi ±" + Math.round(p.akurasi) + " m<br/>" : "") +
+            '<span style="color:#666">' + String(p.waktu || "").replace("T", " ").slice(0, 16) + "</span></div>").addTo(layer);
+        bounds.push([p.lat, p.lng]);
+        html += '<div class="jx-card">' +
+          (p.foto ? '<img src="' + p.foto + '" style="width:30px;height:30px;border-radius:50%;object-fit:cover"/>'
+                  : '<div style="width:30px;height:30px;border-radius:50%;background:#425046;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700">' + String(p.nama || "?").charAt(0).toUpperCase() + "</div>") +
+          '<div style="flex:1"><b>' + (p.nama || p.email) + (own ? " (Anda)" : "") + "</b>" +
+          '<div style="color:#6B6B5F">' + (p.akurasi ? "±" + Math.round(p.akurasi) + " m · " : "") +
+          String(p.waktu || "").replace("T", " ").slice(11, 16) + "</div></div>" +
+          '<span style="width:8px;height:8px;border-radius:50%;background:#22c55e"></span></div>';
+      });
+      $("jx-rekan").innerHTML = html || '<div class="jx-note">Belum ada rekan yang sedang berbagi posisi.</div>';
+      if (bounds.length && map) { try { map.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 }); } catch (e) {} }
+    }).catch(function (e) { msg("jx-msg-k", "Gagal memuat posisi: " + e.message, false); });
+  }
+  function kirimPosisi() {
+    if (!navigator.geolocation || !SS) return;
+    navigator.geolocation.getCurrentPosition(function (pos) {
+      call("pushPosition", SS, {
+        deviceId: DEV, lat: pos.coords.latitude, lng: pos.coords.longitude, akurasi: pos.coords.accuracy
+      }).then(refreshRekan).catch(function () {});
+    }, function () {}, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+  }
+  $("jx-toggle").addEventListener("click", function () {
+    if (timer) {
+      clearInterval(timer); timer = null;
+      $("jx-fab").classList.remove("jx-live");
+      this.textContent = "Mulai Berbagi";
+      call("stopSharing", SS, DEV).catch(function () {});
+      msg("jx-msg-k", "Berhenti berbagi posisi.", true);
+      refreshRekan();
+      return;
+    }
+    if (!SS) { msg("jx-msg-k", "Spreadsheet belum terhubung.", false); return; }
+    var detik = parseInt($("jx-interval").value, 10) || 30;
+    kirimPosisi();
+    timer = setInterval(kirimPosisi, detik * 1000);
+    $("jx-fab").classList.add("jx-live");
+    this.textContent = "Berhenti";
+    msg("jx-msg-k", "\uD83D\uDCCD Posisi Anda dibagikan tiap " + detik + " detik.", true);
+  });
+
+  /* ---------- TTD OTOMATIS DI LAPORAN PDF ----------
+     Laporan dicetak lewat window.open + document.write oleh aplikasi utama.
+     Kita bungkus window.open, lalu sisipkan gambar TTD ke blok tanda tangan. */
+  var _open = window.open;
+  window.open = function () {
+    var w = _open.apply(window, arguments);
+    try {
+      if (!w || !w.document) return w;
+      var _write = w.document.write.bind(w.document);
+      w.document.write = function (html) {
+        try {
+          if (MYTTD && typeof html === "string" && html.indexOf("sign-name") !== -1) {
+            // Sisipkan gambar TTD tepat di atas nama penanda tangan.
+            html = html.replace(/<div class="sign-name">/,
+              '<img src="' + MYTTD + '" style="max-width:150px;max-height:60px;display:block;margin:2px auto -6px;" alt="Tanda tangan" /><div class="sign-name">');
+            // Kurangi ruang kosong bekas tanda tangan manual.
+            html = html.replace(/\.sign-name\s*\{\s*margin-top:\s*\d+px/, ".sign-name { margin-top: 4px");
+          }
+        } catch (e) {}
+        return _write(html);
+      };
+    } catch (e) {}
+    return w;
+  };
+
+
+  /* ---------- OBROLAN TIM ---------- */
+  var chatTimer = null, lastChatCount = 0, chatSeen = parseInt(localStorage.getItem("jx_chat_seen") || "0", 10);
+
+  function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]; }); }
+
+  function renderChat(list) {
+    var box = $("jx-chatlist");
+    var atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+    var html = "";
+    (list || []).forEach(function (m) {
+      var own = ME && m.email === ME.email;
+      var av = m.foto
+        ? '<img src="' + m.foto + '" style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0"/>'
+        : '<div style="width:26px;height:26px;border-radius:50%;background:#425046;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;flex-shrink:0">' + esc(String(m.nama || "?").charAt(0).toUpperCase()) + "</div>";
+      var jam = String(m.waktu || "").replace("T", " ").slice(11, 16);
+      var gps = "";
+      if (m.lat && m.lng) {
+        gps = '<button class="jx-gps" data-lat="' + m.lat + '" data-lng="' + m.lng + '" '
+            + 'style="margin-top:3px;background:#eef5f0;border:1px solid #cfe0d6;color:#1b4d3e;font-size:9px;font-weight:700;border-radius:6px;padding:2px 6px;cursor:pointer">'
+            + "\uD83D\uDCCD " + Number(m.lat).toFixed(5) + ", " + Number(m.lng).toFixed(5) + " \u2014 lihat di peta"
+            + "</button>";
+      }
+      html += '<div style="display:flex;gap:6px;' + (own ? "flex-direction:row-reverse;" : "") + '">' +
+        av +
+        '<div style="max-width:78%;background:' + (own ? "#dcf3e8" : "#F1F1EC") + ';border-radius:10px;padding:6px 9px">' +
+        '<div style="font-size:9px;font-weight:800;color:#1b4d3e">' + esc(m.nama || m.email) + (own ? " (Anda)" : "") + ' · <span style="color:#8f8f80;font-weight:400">' + jam + "</span></div>" +
+        '<div style="font-size:12px;color:#2D2D29;white-space:pre-wrap;word-break:break-word">' + esc(m.pesan) + "</div>" +
+        gps + "</div></div>";
+    });
+    box.innerHTML = html || '<div class="jx-note" style="text-align:center;margin-top:40px">Belum ada pesan. Mulai percakapan!</div>';
+    if (atBottom) box.scrollTop = box.scrollHeight;
+    // tombol GPS → lompat ke peta kolaborasi
+    Array.prototype.forEach.call(box.querySelectorAll(".jx-gps"), function (b) {
+      b.addEventListener("click", function () {
+        var la = parseFloat(b.dataset.lat), ln = parseFloat(b.dataset.lng);
+        // pindah ke tab kolaborasi & zoom
+        document.querySelector('.jx-tabs button[data-s="kolab"]').click();
+        setTimeout(function () { if (map) { map.setView([la, ln], 17); L.popup().setLatLng([la, ln]).setContent("\uD83D\uDCCD Titik dari obrolan").openOn(map); } }, 300);
+      });
+    });
+  }
+
+  function loadChat(scrollToEnd) {
+    if (!SS) return;
+    call("ambilPesan", SS, { ruang: "umum" }).then(function (list) {
+      list = list || [];
+      renderChat(list);
+      // lencana belum dibaca
+      var unread = Math.max(0, list.length - chatSeen);
+      var openNow = $("jx-modal").style.display === "flex" && document.querySelector('.jx-tabs button[data-s="chat"]').classList.contains("on");
+      if (openNow) { chatSeen = list.length; localStorage.setItem("jx_chat_seen", String(chatSeen)); unread = 0; }
+      var badge = $("jx-chatbadge");
+      if (unread > 0) { badge.textContent = unread > 99 ? "99+" : unread; badge.style.display = "flex"; }
+      else badge.style.display = "none";
+      lastChatCount = list.length;
+      if (scrollToEnd) { var b = $("jx-chatlist"); b.scrollTop = b.scrollHeight; }
+    }).catch(function () {});
+  }
+
+  function sendChat() {
+    var t = $("jx-chatin").value.trim();
+    if (!t) return;
+    if (!SS) { msg("jx-msg-c", "Spreadsheet belum terhubung.", false); return; }
+    var payload = { ruang: "umum", pesan: t };
+    var btn = $("jx-chatsend");
+    function doSend() {
+      btn.disabled = true;
+      call("kirimPesan", SS, payload).then(function () {
+        $("jx-chatin").value = ""; $("jx-lampirgps").checked = false;
+        loadChat(true);
+      }).catch(function (e) { msg("jx-msg-c", e.message, false); })
+        .then(function () { btn.disabled = false; });
+    }
+    if ($("jx-lampirgps").checked && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(function (pos) {
+        payload.lat = pos.coords.latitude; payload.lng = pos.coords.longitude; doSend();
+      }, function () { doSend(); }, { enableHighAccuracy: true, timeout: 10000 });
+    } else doSend();
+  }
+
+  $("jx-chatsend").addEventListener("click", sendChat);
+  $("jx-chatin").addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); sendChat(); } });
+
+  /* ---------- UI ---------- */
+  $("jx-fab").addEventListener("click", function () {
+    $("jx-modal").style.display = "flex";
+    setTimeout(padInit, 80);
+    mapInit();
+    setTimeout(function () { if (map) map.invalidateSize(); }, 250);
+    refreshRekan();
+    loadChat(false);
+  });
+  $("jx-close").addEventListener("click", function () { $("jx-modal").style.display = "none"; });
+  $("jx-modal").addEventListener("click", function (e) { if (e.target === this) this.style.display = "none"; });
+  Array.prototype.forEach.call(document.querySelectorAll(".jx-tabs button"), function (b) {
+    b.addEventListener("click", function () {
+      document.querySelectorAll(".jx-tabs button").forEach(function (x) { x.classList.remove("on"); });
+      b.classList.add("on");
+      document.querySelectorAll(".jx-sec").forEach(function (s) { s.classList.toggle("on", s.dataset.s === b.dataset.s); });
+      if (b.dataset.s === "kolab") { mapInit(); setTimeout(function () { if (map) map.invalidateSize(); }, 200); refreshRekan(); }
+      if (b.dataset.s === "ttd") { ctx = null; setTimeout(padInit, 80); }
+      if (b.dataset.s === "chat") { loadChat(true); }
+    });
+  });
+
+  // Perbarui daftar rekan berkala saat panel terbuka
+  setInterval(function () { if ($("jx-modal").style.display === "flex") refreshRekan(); }, 30000);
+  // Polling chat tiap 15 detik untuk lencana belum-dibaca (ringan)
+  setInterval(function () { if (SS) loadChat(false); }, 15000);
+
+  if (document.readyState === "complete" || document.readyState === "interactive") setTimeout(boot, 800);
+  else window.addEventListener("load", function () { setTimeout(boot, 800); });
+})();
+</script>
+
+<script>
+/* ===== PEMICU BOOT — dijalankan setelah SEMUA blok script termuat ===== */
+(function(){
+  function startApp(){
+    if(typeof boot==="function"){ try{ boot(); }catch(e){ document.getElementById("app").innerHTML='<div style="padding:40px;text-align:center;color:#900">Gagal memuat UI: '+(e&&e.message||e)+'</div>'; } }
+    else { setTimeout(startApp,50); } // tunggu bila belum siap
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",startApp);
+  else startApp();
+})();
+</script>
+
+</body>
+</html>
