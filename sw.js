@@ -16,7 +16,7 @@ self.addEventListener("activate", function (e) {
 });
 self.addEventListener("fetch", function (e) {
   var req = e.request, url = req.url;
-  if (req.method === "POST" || url.indexOf("script.google.com") !== -1 || url.indexOf("googleusercontent.com") !== -1) return;
+  if (req.method === "POST" || url.indexOf("script.google.com") !== -1 || url.indexOf("googleusercontent.com") !== -1 || url.indexOf("cdnjs.cloudflare.com") !== -1 || url.indexOf("unpkg.com") !== -1 || url.indexOf("api.anthropic.com") !== -1) return;
   if (req.mode === "navigate") {
     e.respondWith(fetch(req).then(function (r) {
       var cp = r.clone(); caches.open(VERSI).then(function (c) { c.put("./index.html", cp); }); return r;

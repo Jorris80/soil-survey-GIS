@@ -805,11 +805,12 @@ function printBor(id,paper){
 }
 
 /* ===== TAB: PETA (custom layer + kolaborasi + fullscreen) ===== */
-var _map=null,_layers={},_baseLayers={},_collabTimer=null,_customLayer=null,_mbtiles=null;
+var _map=null,_layers={},_baseLayers={},_collabTimer=null,_customLayer=null,_mbtiles=null,_extraLayers=[],_myGpsMarker=null,_myGpsCircle=null,_myGpsWatch=null;
 function viewMap(){
   return '<div class="card" style="padding:0;overflow:hidden">'+
     '<div class="row" style="justify-content:space-between;padding:12px 14px 8px"><h3 style="margin:0">🗺️ Peta Titik Bor</h3>'+
       '<div class="row" style="gap:6px">'+
+        '<button class="chip" id="identBtn" onclick="toggleIdentify()">🔎 Identify</button>'+
         '<button class="chip" onclick="toggleGisPanel()">⚙️ Layer</button>'+
         '<button class="chip" onclick="toggleFull()">⛶ Layar Penuh</button>'+
       '</div>'+
@@ -819,29 +820,47 @@ function viewMap(){
   '</div>';
 }
 function gisPanelHTML(){
+  function bb(k,l){return '<button class="btn '+((S.base||"street")===k?"btn-p":"btn-s")+'" style="flex:1;padding:8px;font-size:11px" onclick="setBase(\''+k+'\')">'+l+'</button>';}
+  var extraList=(_extraLayers||[]).map(function(x,i){
+    return '<div class="row" style="justify-content:space-between;font-size:11px;padding:3px 0"><span>'+esc(x.name)+'</span>'+
+      '<span><input type="checkbox" '+(x.on?"checked":"")+' onchange="toggleExtra('+i+',this.checked)" style="width:auto"/> <a href="#" onclick="removeExtra('+i+');return false" style="color:#dc2626">✕</a></span></div>';
+  }).join("");
   return '<div class="card" style="margin:0;background:var(--krem)">'+
     '<label class="lbl">Tipe Basemap</label>'+
-    '<div class="row" style="gap:6px">'+
-      '<button class="btn '+((S.base||"street")==="street"?"btn-p":"btn-s")+'" style="flex:1;padding:8px" onclick="setBase(\'street\')">Street</button>'+
-      '<button class="btn '+(S.base==="sat"?"btn-p":"btn-s")+'" style="flex:1;padding:8px" onclick="setBase(\'sat\')">Satelit</button>'+
-      '<button class="btn '+(S.base==="topo"?"btn-p":"btn-s")+'" style="flex:1;padding:8px" onclick="setBase(\'topo\')">Topografi</button>'+
+    '<div class="row" style="gap:6px;flex-wrap:wrap">'+
+      bb("street","Street")+bb("sat","Satelit")+bb("topo","Topografi")+bb("sat2","Esri Sat")+
     '</div>'+
-    '<div class="sep"><label class="lbl">Unggah Spasial (.geojson / .kml)</label>'+
-      '<label class="btn btn-s btn-full" style="border-style:dashed;flex-direction:column;padding:12px"><span style="font-size:20px">☁️</span><span style="font-size:11px" id="gisFileName">Klik / pilih file GeoJSON atau KML</span><input type="file" accept=".geojson,.json,.kml" style="display:none" onchange="loadCustomLayer(this)"/></label>'+
-      (_customLayer?'<button class="btn btn-d btn-full" style="margin-top:6px" onclick="clearCustomLayer()">Hapus Layer Kustom</button>':'')+
-    '</div>'+
-    '<div class="sep"><label class="lbl">Layer Data Peta (.mbtiles raster)</label>'+
-      '<label class="btn btn-s btn-full" style="border-style:dashed;flex-direction:column;padding:12px;color:#2563eb"><span style="font-size:20px">🗄️</span><span style="font-size:11px" id="mbtName">Unggah .mbtiles (peta offline raster)</span><input type="file" accept=".mbtiles" style="display:none" onchange="loadMbtiles(this)"/></label>'+
-      (_mbtiles?'<button class="btn btn-d btn-full" style="margin-top:6px" onclick="clearMbtiles()">Hapus Basemap Offline</button>':'')+
-      '<div class="hint">Peta raster offline (png/jpg/webp) hasil ekspor QGIS/Mobile Atlas. Berguna di lapangan tanpa sinyal.</div>'+
+    '<div class="sep"><label class="lbl">Posisi GPS Perangkat Saya</label>'+
+      '<label class="row" style="gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="myGps" '+(S.myGps?"checked":"")+' onchange="toggleMyGps(this.checked)" style="width:auto"/> Tampilkan & ikuti lokasi saya di peta</label>'+
+      '<div class="hint">Titik biru mengikuti GPS perangkat (live), seperti mini-map kolaborasi.</div>'+
     '</div>'+
     '<div class="sep"><label class="lbl">Kolaborasi (Posisi Tim)</label>'+
-      '<label class="row" style="gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="showCollab" '+(S.showCollab?"checked":"")+' onchange="S.showCollab=this.checked;refreshCollabMap()" style="width:auto"/> Tampilkan posisi rekan surveyor di peta</label>'+
-      '<div class="hint">Avatar & foto rekan yang sedang berbagi posisi (dari fitur 👥) akan muncul di peta ini.</div>'+
+      '<label class="row" style="gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="showCollab" '+(S.showCollab?"checked":"")+' onchange="S.showCollab=this.checked;refreshCollabMap()" style="width:auto"/> Tampilkan posisi rekan surveyor</label>'+
     '</div>'+
+    '<div class="sep"><label class="lbl">Unggah Layer File (SHP / KML / GeoJSON)</label>'+
+      '<label class="btn btn-s btn-full" style="border-style:dashed;flex-direction:column;padding:12px"><span style="font-size:20px">📂</span><span style="font-size:11px" id="gisFileName">GeoJSON, KML, atau SHP (.zip)</span><input type="file" accept=".geojson,.json,.kml,.zip" style="display:none" onchange="loadCustomLayer(this)"/></label>'+
+      '<div class="hint">Shapefile: unggah <b>.zip</b> berisi .shp/.shx/.dbf/(.prj).</div>'+
+    '</div>'+
+    '<div class="sep"><label class="lbl">MBTiles Raster (offline)</label>'+
+      '<label class="btn btn-s btn-full" style="border-style:dashed;flex-direction:column;padding:12px;color:#2563eb"><span style="font-size:20px">🗄️</span><span style="font-size:11px" id="mbtName">Unggah .mbtiles</span><input type="file" accept=".mbtiles" style="display:none" onchange="loadMbtiles(this)"/></label>'+
+      (_mbtiles?'<button class="btn btn-d btn-full" style="margin-top:6px" onclick="clearMbtiles()">Hapus MBTiles</button>':'')+
+    '</div>'+
+    '<div class="sep"><label class="lbl">Tambah Layer via URL</label>'+
+      '<select class="in" id="urlType" onchange="urlTypeHint()"><option value="xyz">XYZ Tile (raster)</option><option value="wms">WMS</option><option value="wmts">WMTS (template)</option><option value="arcgis">ArcGIS REST</option><option value="geojsonurl">GeoJSON (URL)</option></select>'+
+      '<input class="in" id="urlVal" style="margin-top:6px" placeholder="Tempel URL layer…"/>'+
+      '<input class="in" id="urlOpt" style="margin-top:6px" placeholder="(WMS: nama layer)"/>'+
+      '<div class="hint" id="urlHint">XYZ: https://{s}.tile.osm.org/{z}/{x}/{y}.png</div>'+
+      '<button class="btn btn-p btn-full" style="margin-top:6px" onclick="addUrlLayer()">➕ Tambah Layer</button>'+
+    '</div>'+
+    (extraList?'<div class="sep"><label class="lbl">Layer Aktif</label>'+extraList+'</div>':'')+
   '</div>';
 }
-function toggleGisPanel(){var p=$("#gisPanel");if(p)p.style.display=p.style.display==="none"?"block":"none";}
+function urlTypeHint(){
+  var t=($("#urlType")||{}).value;var h=$("#urlHint");var o=$("#urlOpt");if(!h)return;
+  var map={xyz:"XYZ: https://{s}.tile.osm.org/{z}/{x}/{y}.png",wms:"WMS: https://server/geoserver/wms — isi nama layer di bawah",wmts:"WMTS template: https://server/.../{z}/{y}/{x}.png",arcgis:"ArcGIS REST: …/MapServer atau …/FeatureServer/0",geojsonurl:"GeoJSON URL: https://…/data.geojson"};
+  h.textContent=map[t]||"";if(o)o.style.display=(t==="wms")?"block":"none";
+}
+function toggleGisPanel(){var p=$("#gisPanel");if(p){p.style.display=p.style.display==="none"?"block":"none";if(p.style.display==="block")setTimeout(urlTypeHint,0);}}
 function toggleFull(){
   var wrap=$("#mapWrap");if(!wrap)return;
   if(!S._full){wrap.style.position="fixed";wrap.style.inset="0";wrap.style.zIndex="9998";wrap.style.background="#fff";
@@ -856,8 +875,9 @@ function toggleFull(){
 }
 function baseTile(kind){
   if(kind==="sat")return L.tileLayer("https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",{maxZoom:21,subdomains:["mt0","mt1","mt2","mt3"],attribution:"© Google"});
-  if(kind==="topo")return L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",{maxZoom:17,attribution:"© OpenTopoMap"});
-  return L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"});
+  if(kind==="sat2")return L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,attribution:"© Esri"});
+  if(kind==="topo")return L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",{maxZoom:17,subdomains:["a","b","c"],attribution:"© OpenTopoMap"});
+  return L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,subdomains:["a","b","c"],attribution:"© OpenStreetMap"});
 }
 function setBase(k){
   S.base=k;
@@ -871,8 +891,14 @@ function initMap(){
   _baseLayers.cur=baseTile(S.base||"street").addTo(_map);
   _layers.data=L.layerGroup().addTo(_map);
   _layers.collab=L.layerGroup().addTo(_map);
+  // pasang ulang layer tambahan yang masih aktif
+  _myGpsMarker=null;_myGpsCircle=null;
+  (_extraLayers||[]).forEach(function(x){ if(x.on){ try{ x.layer.addTo(_map); }catch(e){} } });
+  if(_mbtiles){ try{ _mbtiles.addTo(_map); }catch(e){} }
   drawDataMarkers();
   if(S.showCollab)refreshCollabMap();
+  if(S.myGps)toggleMyGps(true);
+  _map.on("click",function(e){ if(S._identify)identifyAt(e.latlng); });
   setTimeout(function(){_map.invalidateSize();},200);
 }
 function drawDataMarkers(){
@@ -905,31 +931,73 @@ function refreshCollabMap(){
       var ic=L.divIcon({className:"",html:av,iconSize:[34,34],iconAnchor:[17,17],popupAnchor:[0,-18]});
       if(ppl.akurasi)L.circle([ppl.lat,ppl.lng],{radius:ppl.akurasi,color:"#3b82f6",weight:1,fillOpacity:.08}).addTo(_layers.collab);
       var pimg=ppl.foto?'<img src="'+esca(ppl.foto)+'" style="width:100%;max-height:120px;object-fit:cover;border-radius:6px;margin-bottom:4px;cursor:zoom-in" onclick="lbOpen(this.src,\''+esca(ppl.nama||"")+'\')"/>':"";
-      L.marker([ppl.lat,ppl.lng],{icon:ic}).bindPopup('<div style="min-width:150px">'+pimg+'<b>'+esc(ppl.nama||ppl.email)+'</b><br/>'+esc(ppl.email||"")+(ppl.akurasi?'<br/>±'+Math.round(ppl.akurasi)+' m':'')+(ppl.foto?'<br/><button onclick="lbOpen(\''+esca(ppl.foto)+'\',\''+esca(ppl.nama||"")+'\')" style="margin-top:5px;background:#425046;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">🔍 Perbesar Foto</button>':'')+'</div>').addTo(_layers.collab);
+      var rb=ppl.role?' <span style="font-size:9px;background:#e0e7ff;color:#3730a3;padding:1px 5px;border-radius:5px">'+esc(String(ppl.role).toUpperCase())+'</span>':'';
+      L.marker([ppl.lat,ppl.lng],{icon:ic}).bindPopup('<div style="min-width:150px">'+pimg+'<b>'+esc(ppl.nama||ppl.email)+'</b>'+rb+(ppl.jabatan?'<br/><span style="font-size:11px;color:#555">'+esc(ppl.jabatan)+'</span>':'')+(ppl.akurasi?'<br/><span style="font-size:11px;color:#425046">📍 ±'+Math.round(ppl.akurasi)+' m</span>':'')+(ppl.foto?'<br/><button onclick="lbOpen(\''+esca(ppl.foto)+'\',\''+esca(ppl.nama||"")+'\')" style="margin-top:5px;background:#425046;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">🔍 Perbesar Foto</button>':'')+'</div>').addTo(_layers.collab);
     });
   }).catch(function(){});
 }
 function loadCustomLayer(input){
   var f=input.files&&input.files[0];if(!f)return;
   var nm=$("#gisFileName");if(nm)nm.textContent=f.name;
+  var col="#A65D37";
+  function addLyr(lyr,label){
+    lyr.addTo(_map);
+    _extraLayers.push({name:label||f.name,layer:lyr,on:true,type:"file"});
+    try{_map.fitBounds(lyr.getBounds(),{padding:[30,30]});}catch(e){}
+    toast("Layer '"+(label||f.name)+"' dimuat.","ok");refreshGisPanel();
+  }
+  // SHAPEFILE (.zip) via shpjs
+  if(/\.zip$/i.test(f.name)){
+    toast("Membaca Shapefile…","info");
+    ensureShpJs().then(function(){
+      var fr=new FileReader();
+      fr.onload=function(){
+        window.shp(fr.result).then(function(gj){
+          var lyr=L.geoJSON(gj,{style:{color:col,weight:2,fillOpacity:.15},pointToLayer:function(ft,ll){return L.circleMarker(ll,{radius:5,color:col});},onEachFeature:popupProps});
+          addLyr(lyr,"SHP "+f.name.replace(/\.zip$/i,""));
+        }).catch(function(e){toast("SHP gagal: "+e.message,"err");});
+      };
+      fr.readAsArrayBuffer(f);
+    }).catch(function(e){toast(e.message,"err");});
+    input.value="";return;
+  }
+  // KML / GeoJSON (teks)
   var fr=new FileReader();
   fr.onload=function(){
     try{
-      if(_customLayer){_map.removeLayer(_customLayer);_customLayer=null;}
       var lyr;
       if(/\.kml$/i.test(f.name)){
         var xml=new DOMParser().parseFromString(fr.result,"text/xml");
         lyr=kmlToLayer(xml);
       } else {
-        lyr=L.geoJSON(JSON.parse(fr.result),{style:{color:"#A65D37",weight:2,fillOpacity:.15},pointToLayer:function(ft,ll){return L.circleMarker(ll,{radius:5,color:"#A65D37"});}});
+        lyr=L.geoJSON(JSON.parse(fr.result),{style:{color:col,weight:2,fillOpacity:.15},pointToLayer:function(ft,ll){return L.circleMarker(ll,{radius:5,color:col});},onEachFeature:popupProps});
       }
-      _customLayer=lyr.addTo(_map);
-      try{_map.fitBounds(lyr.getBounds(),{padding:[30,30]});}catch(e){}
-      toast("Layer kustom dimuat.","ok");
-      var p=$("#gisPanel");if(p)p.innerHTML=gisPanelHTML();
+      addLyr(lyr);
     }catch(e){toast("Gagal memuat: "+e.message,"err");}
   };
   fr.readAsText(f);
+  input.value="";
+}
+function ensureShpJs(){
+  return new Promise(function(res,rej){
+    if(window.shp)return res();
+    var urls=[
+      "https://unpkg.com/shpjs@6.1.0/dist/shp.min.js",
+      "https://cdn.jsdelivr.net/npm/shpjs@6.1.0/dist/shp.min.js",
+      "https://unpkg.com/shpjs@4.0.4/dist/shp.min.js",
+      "https://cdn.jsdelivr.net/npm/shpjs@4.0.4/dist/shp.min.js"
+    ];
+    var i=0;
+    (function tryNext(){
+      if(window.shp)return res();
+      if(i>=urls.length)return rej(new Error("Gagal memuat pustaka Shapefile. Cek koneksi internet, lalu coba lagi."));
+      var sc=document.createElement("script");
+      sc.src=urls[i++];
+      sc.onload=function(){ window.shp?res():tryNext(); };
+      sc.onerror=function(){ tryNext(); };
+      document.head.appendChild(sc);
+    })();
+  });
 }
 function kmlToLayer(xml){
   var g=L.layerGroup();
@@ -944,6 +1012,160 @@ function kmlToLayer(xml){
 }
 function clearCustomLayer(){if(_customLayer){_map.removeLayer(_customLayer);_customLayer=null;}var p=$("#gisPanel");if(p)p.innerHTML=gisPanelHTML();toast("Layer kustom dihapus.","ok");}
 
+
+
+/* ===== GPS PERANGKAT SAYA (live, ikuti posisi) ===== */
+function toggleMyGps(on){
+  S.myGps=on;
+  if(!on){ stopMyGps(); return; }
+  if(!navigator.geolocation){toast("Perangkat tak mendukung GPS.","err");S.myGps=false;return;}
+  toast("Mengaktifkan GPS…","info");
+  _myGpsWatch=navigator.geolocation.watchPosition(function(pos){
+    var la=pos.coords.latitude,ln=pos.coords.longitude,ac=pos.coords.accuracy||0;
+    if(!_map)return;
+    if(!_myGpsMarker){
+      var ss=S.session||{};
+      var av=ss.foto?'<img src="'+esca(ss.foto)+'" style="width:34px;height:34px;border-radius:50%;border:3px solid #2563eb;object-fit:cover"/>':'<div style="width:18px;height:18px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 0 0 2px #2563eb,0 2px 6px rgba(0,0,0,.4)"></div>';
+      var ic=L.divIcon({className:"",html:'<div style="display:flex;align-items:center;justify-content:center">'+av+'</div>',iconSize:ss.foto?[34,34]:[18,18],iconAnchor:ss.foto?[17,17]:[9,9]});
+      _myGpsMarker=L.marker([la,ln],{icon:ic,zIndexOffset:1000}).addTo(_map).bindPopup(myGpsPopup(ac));
+      _myGpsCircle=L.circle([la,ln],{radius:ac,color:"#2563eb",weight:1,fillOpacity:.1}).addTo(_map);
+      _map.setView([la,ln],Math.max(_map.getZoom(),16));
+    } else {
+      _myGpsMarker.setLatLng([la,ln]);_myGpsCircle.setLatLng([la,ln]).setRadius(ac);
+      _myGpsMarker.setPopupContent(myGpsPopup(ac));
+      if(S._followGps!==false)_map.panTo([la,ln]);
+    }
+  },function(err){toast("GPS gagal: "+err.message,"err");S.myGps=false;var c=$("#myGps");if(c)c.checked=false;},{enableHighAccuracy:true,maximumAge:2000,timeout:15000});
+}
+function myGpsPopup(ac){
+  var ss=S.session||{};
+  var pf=ss.foto&&/^data:|^https?:/.test(ss.foto);
+  var img=pf?'<img src="'+esca(ss.foto)+'" style="width:100%;max-height:110px;object-fit:cover;border-radius:6px;margin-bottom:4px;cursor:zoom-in" onclick="lbOpen(this.src,\''+esca(ss.name||"Saya")+'\')"/>':"";
+  return '<div style="min-width:150px">'+img+'<b>'+esc(ss.name||ss.username||"Saya")+'</b> <span style="font-size:10px;background:#dbeafe;color:#1e40af;padding:1px 5px;border-radius:5px">'+String(ss.role||"-").toUpperCase()+'</span>'+
+    (ss.jabatan?'<br/><span style="font-size:11px;color:#555">'+esc(ss.jabatan)+'</span>':'')+
+    '<br/><span style="font-size:11px;color:#2563eb">📍 Lokasi saya'+(ac?' · ±'+Math.round(ac)+' m':'')+'</span>'+
+    (pf?'<br/><button onclick="lbOpen(\''+esca(ss.foto)+'\',\''+esca(ss.name||"Saya")+'\')" style="margin-top:5px;background:#2563eb;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">🔍 Perbesar Foto</button>':'')+
+    '</div>';
+}
+function stopMyGps(){
+  if(_myGpsWatch!=null){navigator.geolocation.clearWatch(_myGpsWatch);_myGpsWatch=null;}
+  if(_myGpsMarker&&_map){_map.removeLayer(_myGpsMarker);_myGpsMarker=null;}
+  if(_myGpsCircle&&_map){_map.removeLayer(_myGpsCircle);_myGpsCircle=null;}
+}
+
+/* ===== LAYER via URL: XYZ / WMS / WMTS / ArcGIS REST / GeoJSON ===== */
+function addUrlLayer(){
+  var t=($("#urlType")||{}).value;var url=($("#urlVal").value||"").trim();var opt=($("#urlOpt").value||"").trim();
+  if(!url){toast("Tempel URL layer.","err");return;}
+  try{
+    var lyr,nm;
+    if(t==="xyz"){ lyr=L.tileLayer(url,{maxZoom:22,attribution:"XYZ"}); nm="XYZ "+shortUrl(url); }
+    else if(t==="wmts"){ lyr=L.tileLayer(url,{maxZoom:22,attribution:"WMTS"}); nm="WMTS "+shortUrl(url); }
+    else if(t==="wms"){
+      if(!opt){toast("WMS: isi nama layer di kolom bawah.","err");return;}
+      lyr=L.tileLayer.wms(url,{layers:opt,format:"image/png",transparent:true,attribution:"WMS"}); nm="WMS "+opt;
+    }
+    else if(t==="arcgis"){ addArcgisLayer(url); return; }
+    else if(t==="geojsonurl"){ addGeojsonUrl(url); return; }
+    if(lyr){ lyr.addTo(_map); _extraLayers.push({name:nm,layer:lyr,on:true,type:t}); toast("Layer ditambahkan.","ok"); refreshGisPanel(); }
+  }catch(e){toast("Gagal: "+e.message,"err");}
+}
+function shortUrl(u){try{var a=u.replace(/^https?:\/\//,"").split("/")[0];return a;}catch(e){return "layer";}}
+
+function addGeojsonUrl(url){
+  toast("Memuat GeoJSON…","info");
+  fetch(url).then(function(r){return r.json();}).then(function(gj){
+    var lyr=L.geoJSON(gj,{style:{color:"#7c3aed",weight:2,fillOpacity:.15},pointToLayer:function(f,ll){return L.circleMarker(ll,{radius:5,color:"#7c3aed"});},onEachFeature:popupProps});
+    lyr.addTo(_map);_extraLayers.push({name:"GeoJSON "+shortUrl(url),layer:lyr,on:true,type:"geojsonurl"});
+    try{_map.fitBounds(lyr.getBounds(),{padding:[30,30]});}catch(e){}
+    toast("GeoJSON dimuat.","ok");refreshGisPanel();
+  }).catch(function(e){toast("Gagal muat GeoJSON: "+e.message,"err");});
+}
+
+/* ArcGIS REST: MapServer/ImageServer → export image tile; FeatureServer/n → GeoJSON */
+function addArcgisLayer(url){
+  var u=url.replace(/\/+$/,"");
+  if(/FeatureServer\/\d+$|MapServer\/\d+$/.test(u)){
+    // layer fitur → query GeoJSON
+    toast("Query ArcGIS FeatureServer…","info");
+    var q=u+"/query?where=1%3D1&outFields=*&f=geojson&outSR=4326";
+    fetch(q).then(function(r){return r.json();}).then(function(gj){
+      var lyr=L.geoJSON(gj,{style:{color:"#ea580c",weight:2,fillOpacity:.12},pointToLayer:function(f,ll){return L.circleMarker(ll,{radius:5,color:"#ea580c"});},onEachFeature:popupProps});
+      lyr.addTo(_map);_extraLayers.push({name:"ArcGIS "+shortUrl(u),layer:lyr,on:true,type:"arcgis"});
+      try{_map.fitBounds(lyr.getBounds(),{padding:[30,30]});}catch(e){}
+      toast("Layer ArcGIS dimuat.","ok");refreshGisPanel();
+    }).catch(function(e){toast("Gagal: "+e.message,"err");});
+  } else {
+    // MapServer/ImageServer → tile export (dynamic)
+    var tpl=u+"/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image";
+    var lyr=L.tileLayer(tpl,{attribution:"ArcGIS",maxZoom:22,tileSize:256});
+    // Leaflet tak isi {bbox} otomatis; pakai kelas kustom
+    lyr=makeArcgisDynamic(u);
+    lyr.addTo(_map);_extraLayers.push({name:"ArcGIS "+shortUrl(u),layer:lyr,on:true,type:"arcgis"});
+    toast("Layer ArcGIS (dinamis) ditambahkan.","ok");refreshGisPanel();
+  }
+}
+function makeArcgisDynamic(base){
+  var Proto=L.TileLayer.extend({
+    createTile:function(coords,done){
+      var img=document.createElement("img");
+      var size=this.getTileSize();
+      var nw=this._map.unproject(coords.scaleBy(size),coords.z);
+      var se=this._map.unproject(coords.add([1,1]).scaleBy(size),coords.z);
+      function m(lat,lng){var x=lng*20037508.34/180;var y=Math.log(Math.tan((90+lat)*Math.PI/360))/(Math.PI/180)*20037508.34/180;return [x,y];}
+      var a=m(nw.lat,nw.lng),b=m(se.lat,se.lng);
+      var bbox=a[0]+","+b[1]+","+b[0]+","+a[1];
+      var url=base+"/export?bbox="+bbox+"&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image";
+      img.onload=function(){done(null,img);};img.onerror=function(){done(null,img);};img.src=url;
+      return img;
+    }
+  });
+  return new Proto("",{maxZoom:22});
+}
+function popupProps(f,layer){
+  var p=f&&f.properties;if(!p)return;
+  var keys=Object.keys(p).slice(0,12);
+  var html=keys.map(function(k){return '<b>'+esc(k)+':</b> '+esc(String(p[k]));}).join("<br/>");
+  if(html)layer.bindPopup('<div style="max-width:220px;font-size:11px">'+html+'</div>');
+}
+function toggleExtra(i,on){var x=_extraLayers[i];if(!x)return;x.on=on;if(on)x.layer.addTo(_map);else _map.removeLayer(x.layer);}
+function removeExtra(i){var x=_extraLayers[i];if(!x)return;if(_map)_map.removeLayer(x.layer);_extraLayers.splice(i,1);refreshGisPanel();}
+function refreshGisPanel(){var p=$("#gisPanel");if(p)p.innerHTML=gisPanelHTML();setTimeout(urlTypeHint,0);}
+
+
+/* ===== IDENTIFY: klik peta → atribut fitur terdekat dari layer aktif ===== */
+function toggleIdentify(){
+  S._identify=!S._identify;
+  var b=$("#identBtn");if(b){b.style.background=S._identify?"#1b4d3e":"";b.style.color=S._identify?"#fff":"";}
+  if(_map){_map.getContainer().style.cursor=S._identify?"crosshair":"";}
+  toast(S._identify?"Mode Identify AKTIF — ketuk fitur di peta.":"Mode Identify nonaktif.", "info");
+}
+function identifyAt(latlng){
+  if(!_map)return;
+  var hits=[];
+  var px=_map.latLngToLayerPoint(latlng);
+  function scanLayer(lyr,src){
+    if(!lyr||!lyr.eachLayer)return;
+    lyr.eachLayer(function(l){
+      var f=l.feature;
+      if(l.getLatLng){ // titik
+        var p=_map.latLngToLayerPoint(l.getLatLng());
+        if(px.distanceTo(p)<=14 && f)hits.push({props:f.properties,src:src});
+      } else if(l.getBounds){ // garis/poligon
+        try{ if(l.getBounds().contains(latlng)){ if(f)hits.push({props:f.properties,src:src}); } }catch(e){}
+      }
+    });
+  }
+  (_extraLayers||[]).forEach(function(x){ if(x.on)scanLayer(x.layer,x.name); });
+  scanLayer(_layers.data,"Data Bor/Profil");
+  if(!hits.length){ L.popup().setLatLng(latlng).setContent('<div style="font-size:11px;color:#777">Tidak ada fitur di titik ini.</div>').openOn(_map); return; }
+  var html=hits.slice(0,5).map(function(h){
+    var p=h.props||{};var keys=Object.keys(p).slice(0,14);
+    var rows=keys.map(function(k){return '<tr><td style="font-weight:600;padding:1px 6px 1px 0;vertical-align:top">'+esc(k)+'</td><td style="padding:1px 0">'+esc(String(p[k]))+'</td></tr>';}).join("");
+    return '<div style="margin-bottom:6px"><div style="font-size:10px;font-weight:800;color:#1b4d3e">'+esc(h.src)+'</div><table style="font-size:11px">'+(rows||'<tr><td>(tanpa atribut)</td></tr>')+'</table></div>';
+  }).join("<hr style='border:none;border-top:1px solid #eee;margin:4px 0'/>");
+  L.popup({maxWidth:280}).setLatLng(latlng).setContent('<div style="max-height:240px;overflow:auto">'+html+'</div>').openOn(_map);
+}
 
 /* ===== MBTILES RASTER OFFLINE (sql.js) ===== */
 var _SQL=null;
@@ -2094,7 +2316,8 @@ try{window.saveSession=saveSession;window.S=S;}catch(e){}
     if (!navigator.geolocation || !SS) return;
     navigator.geolocation.getCurrentPosition(function (pos) {
       call("pushPosition", SS, {
-        deviceId: DEV, lat: pos.coords.latitude, lng: pos.coords.longitude, akurasi: pos.coords.accuracy
+        deviceId: DEV, lat: pos.coords.latitude, lng: pos.coords.longitude, akurasi: pos.coords.accuracy,
+        username: (ME && ME.username) || "", email: (ME && ME.email) || ""
       }).then(refreshRekan).catch(function () {});
     }, function () {}, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
   }
