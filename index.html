@@ -415,7 +415,7 @@ function hzSection(){
   var list=S.horizons.slice().sort(function(a,b){return a.depthFrom-b.depthFrom;}).map(function(h,i){
     return '<div class="hz-item"><div class="row" style="justify-content:space-between">'+
       '<b>'+esc(h.horizonName||"-")+(h.horizonSuffix?esc(h.horizonSuffix):"")+' <span style="font-weight:400;color:#6B6B5F">('+fmtDepth(h.depthFrom,h.depthTo)+' cm)</span></b>'+
-      '<button class="chip" style="color:#dc2626;border-color:#fecaca" onclick="delHz('+i+')">Hapus</button></div>'+
+      '<span><button class="chip" onclick="editHz('+i+')">Edit</button> <button class="chip" style="color:#dc2626;border-color:#fecaca" onclick="delHz('+i+')">Hapus</button></span></div>'+
       '<div style="margin-top:3px;color:#55554E">'+
         (h.warnaMatrik_Hue||h.warnaMatrik_Value||h.warnaMatrik_Chroma?('Warna: '+esc([h.warnaMatrik_Hue,h.warnaMatrik_Value&&h.warnaMatrik_Chroma?h.warnaMatrik_Value+"/"+h.warnaMatrik_Chroma:(h.warnaMatrik_Value||h.warnaMatrik_Chroma)].filter(Boolean).join(" "))+' · '):'')+
         (h.texture?'Tekstur: '+esc(h.texture)+' · ':'')+
@@ -461,7 +461,9 @@ function hzSection(){
       inField("__hz_tds","TDS",d.tds,"number")+
     '</div>'+
     inField("__hz_ket","Keterangan",d.keterangan)+
-    '<button class="btn btn-s btn-full" style="margin-top:10px" onclick="addHz()">+ Tambah Horizon</button>'+
+    (S._hzEdit!=null?
+      '<div class="row" style="margin-top:10px"><button class="btn btn-p" style="flex:1" onclick="addHz()">💾 Update Horizon</button><button class="btn btn-s" onclick="cancelHz()">Batal</button></div>'
+      :'<button class="btn btn-s btn-full" style="margin-top:10px" onclick="addHz()">+ Tambah Horizon</button>')+
     '</div>';
 }
 // binding field horizon draft (nama khusus __hz_*)
@@ -481,10 +483,27 @@ function setField(f,v){ // override untuk tangani draft horizon
 function addHz(){
   var d=S.hzDraft;
   if(!d.horizonName){toast("Isi simbol horizon.","err");return;}
-  S.horizons.push(Object.assign({},d));
-  S.hzDraft=emptyHz(); S.hzDraft.depthFrom=num(d.depthTo);
+  if(S._hzEdit!=null && S._hzEditRef){
+    // update horizon yang sedang diedit (berdasarkan referensi objek)
+    var idx=S.horizons.indexOf(S._hzEditRef);
+    if(idx>=0)S.horizons[idx]=Object.assign({},d); else S.horizons.push(Object.assign({},d));
+    S._hzEdit=null;S._hzEditRef=null;S.hzDraft=emptyHz();
+    toast("Horizon diperbarui.","ok");
+  } else {
+    S.horizons.push(Object.assign({},d));
+    S.hzDraft=emptyHz(); S.hzDraft.depthFrom=num(d.depthTo);
+  }
   var m=$("#main");if(m)m.innerHTML=viewForm();
 }
+function editHz(i){
+  var srt=S.horizons.slice().sort(function(a,b){return a.depthFrom-b.depthFrom;});
+  var t=srt[i];if(!t)return;
+  S._hzEdit=i;S._hzEditRef=t;
+  S.hzDraft=Object.assign(emptyHz(),t);
+  var m=$("#main");if(m)m.innerHTML=viewForm();
+  toast("Mengedit horizon "+(t.horizonName||"")+". Ubah lalu tekan Update.","info");
+}
+function cancelHz(){S._hzEdit=null;S._hzEditRef=null;S.hzDraft=emptyHz();var m=$("#main");if(m)m.innerHTML=viewForm();}
 function delHz(i){var srt=S.horizons.slice().sort(function(a,b){return a.depthFrom-b.depthFrom;});var t=srt[i];S.horizons=S.horizons.filter(function(x){return x!==t;});var m=$("#main");if(m)m.innerHTML=viewForm();}
 
 function ambilGPS(){
@@ -1954,6 +1973,8 @@ function hashLite(s){var h=5381;for(var i=0;i<s.length;i++){h=((h<<5)+h)+s.charC
 
 function logout(){
   if(!confirm("Keluar dari aplikasi?"))return;
+  // hentikan berbagi posisi agar tidak tertinggal di peta rekan
+  try{ if(S.ss&&navigator.onLine)call("stopSharing",S.ss,{deviceId:(localStorage.getItem("ss_device")||""),email:(S.session&&S.session.email)||""}).catch(function(){}); }catch(e){}
   clearSession();S.session=null;S._gate=true;
   showLogin("Anda telah keluar.","info");
 }
@@ -2326,7 +2347,7 @@ try{window.saveSession=saveSession;window.S=S;}catch(e){}
       clearInterval(timer); timer = null;
       $("jx-fab").classList.remove("jx-live");
       this.textContent = "Mulai Berbagi";
-      call("stopSharing", SS, DEV).catch(function () {});
+      call("stopSharing", SS, { deviceId: DEV, email: (ME && ME.email) || "" }).catch(function () {});
       msg("jx-msg-k", "Berhenti berbagi posisi.", true);
       refreshRekan();
       return;
@@ -2429,7 +2450,7 @@ try{window.saveSession=saveSession;window.S=S;}catch(e){}
     var t = $("jx-chatin").value.trim();
     if (!t) return;
     if (!SS) { msg("jx-msg-c", "Spreadsheet belum terhubung.", false); return; }
-    var payload = { ruang: "umum", pesan: t };
+    var payload = { ruang: "umum", pesan: t, username: (ME && ME.username) || "", email: (ME && ME.email) || "" };
     var btn = $("jx-chatsend");
     function doSend() {
       btn.disabled = true;
