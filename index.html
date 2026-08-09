@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b4d3e" />
 <link rel="apple-touch-icon" href="./icon-192.png" />
 <script>
-  window.__API_URL__ = window.__API_URL__ || "https://script.google.com/macros/s/AKfycbwGcF-K-p5H7yn3W8VjeBv8DW9wvK_MgdC2NBo6ahwkdDr9kSYbU2b5xQEbD7BqYE-Saw/exec";
+  window.__API_URL__ = window.__API_URL__ || "";
   (function(){var h=location.host||"";if(h.indexOf("script.google.com")===-1&&h.indexOf("googleusercontent.com")===-1&&"serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("./sw.js").catch(function(e){console.warn("SW:",e);});});}})();
 </script>
 <style>
@@ -231,6 +231,29 @@ function parseFotos(r){
   }
   return [];
 }
+/* Carousel foto untuk popup peta: 1 foto tampil, tombol ‹ › ganti, indikator, zoom.
+   Dipakai lintas popup (bor/profil/kolaborasi). Simpan daftar foto di registry global. */
+var _fc={};var _fcSeq=0;
+function fotoCarousel(fotos,caption,color){
+  fotos=(fotos||[]).filter(function(u){return u&&/^data:|^https?:/.test(u);});
+  if(!fotos.length)return "";
+  var id="fc"+(++_fcSeq);
+  _fc[id]={fotos:fotos,i:0,cap:caption||"Foto"};
+  var multi=fotos.length>1;
+  var navBtn=function(dir){return '<button onclick="fcNav(\''+id+'\','+dir+')" style="position:absolute;top:50%;'+(dir<0?"left:4px":"right:4px")+';transform:translateY(-50%);width:26px;height:26px;border-radius:50%;background:rgba(0,0,0,.5);color:#fff;border:none;font-size:15px;font-weight:800;cursor:pointer;line-height:1;z-index:2">'+(dir<0?"‹":"›")+'</button>';};
+  return '<div style="position:relative;margin-bottom:6px">'+
+    '<img id="'+id+'-img" src="'+esca(fotos[0])+'" style="width:100%;height:130px;object-fit:cover;border-radius:8px;cursor:zoom-in" referrerpolicy="no-referrer" onclick="fcZoom(\''+id+'\')"/>'+
+    (multi?navBtn(-1)+navBtn(1)+'<div id="'+id+'-ind" style="position:absolute;bottom:6px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.55);color:#fff;font-size:10px;font-weight:700;padding:1px 8px;border-radius:10px;z-index:2">1 / '+fotos.length+'</div>':'')+
+    '<button onclick="fcZoom(\''+id+'\')" style="position:absolute;top:4px;right:4px;background:'+(color||"#1b4d3e")+';color:#fff;border:none;border-radius:6px;padding:2px 7px;font-size:10px;font-weight:700;cursor:pointer;z-index:2">🔍</button>'+
+  '</div>';
+}
+function fcNav(id,dir){
+  var o=_fc[id];if(!o)return;
+  o.i=(o.i+dir+o.fotos.length)%o.fotos.length;
+  var img=document.getElementById(id+"-img");if(img)img.src=o.fotos[o.i];
+  var ind=document.getElementById(id+"-ind");if(ind)ind.textContent=(o.i+1)+" / "+o.fotos.length;
+}
+function fcZoom(id){var o=_fc[id];if(!o)return;lbOpen(o.fotos[o.i],o.cap+" ("+(o.i+1)+"/"+o.fotos.length+")");}
 function setField(f,v){S.form[f]=v;}
 function setHz(f,v){S.hzDraft[f]=v;}
 
@@ -926,16 +949,16 @@ function drawDataMarkers(){
     if(!r.latitude||!r.longitude)return;
     var icon=L.divIcon({className:"",html:'<div style="width:16px;height:16px;border-radius:50%;background:#1b4d3e;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>',iconSize:[16,16],iconAnchor:[8,8]});
     var fotos=parseFotos(r);
-    var bimg=fotos.length?'<img src="'+esca(fotos[0])+'" style="width:100%;max-height:120px;object-fit:cover;border-radius:6px;margin-bottom:4px;cursor:zoom-in" onclick="lbOpen(this.src,\'Bor '+esca(r.borId)+'\')" referrerpolicy="no-referrer"/>':"";
-    L.marker([r.latitude,r.longitude],{icon:icon}).bindPopup('<div style="min-width:160px">'+bimg+'<b>'+esc(r.borId)+'</b><br/>'+esc(r.perusahaan||"")+'<br/>'+esc(r.jenisTanah||"")+'<br/>'+((r.horizons||[]).length)+' horizon'+(fotos.length?'<br/><button onclick="lbOpen(\''+esca(fotos[0])+'\',\'Bor '+esca(r.borId)+'\')" style="margin-top:5px;background:#1b4d3e;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">🔍 Perbesar Foto'+(fotos.length>1?" ("+fotos.length+")":"")+'</button>':'')+'</div>').addTo(_layers.data);
+    var carou=fotoCarousel(fotos,"Bor "+r.borId,"#1b4d3e");
+    L.marker([r.latitude,r.longitude],{icon:icon}).bindPopup('<div style="min-width:170px">'+carou+'<b>'+esc(r.borId)+'</b><br/>'+esc(r.perusahaan||"")+'<br/>'+esc(r.jenisTanah||"")+'<br/>'+((r.horizons||[]).length)+' horizon</div>').addTo(_layers.data);
     b.push([r.latitude,r.longitude]);
   });
   S.profils.forEach(function(r){
     if(!r.latitude||!r.longitude)return;
     var ic=L.divIcon({className:"",html:'<div style="width:18px;height:18px;background:#A65D37;border:2px solid #fff;border-radius:4px;color:#fff;font:bold 11px/14px sans-serif;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.4)">P</div>',iconSize:[18,18],iconAnchor:[9,9]});
-    var pf=r.foto&&/^data:|^https?:/.test(r.foto);
-    var foto=pf?'<img src="'+esca(r.foto)+'" style="width:100%;max-height:120px;object-fit:cover;border-radius:6px;margin-bottom:4px;cursor:zoom-in" onclick="lbOpen(this.src,\'Profil '+esca(r.pedonNo)+'\')" referrerpolicy="no-referrer"/>':"";
-    L.marker([r.latitude,r.longitude],{icon:ic}).bindPopup('<div style="min-width:160px">'+foto+'<b>PROFIL: '+esc(r.pedonNo)+'</b> ['+esc(r.simbol||"-")+']<br/>'+esc(r.klasUsda||"-")+'<br/>'+esc(r.lokasi||"")+(pf?'<br/><button onclick="lbOpen(\''+esca(r.foto)+'\',\'Profil '+esca(r.pedonNo)+'\')" style="margin-top:5px;background:#A65D37;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">🔍 Perbesar Foto</button>':'')+'</div>').addTo(_layers.data);
+    var pfotos=parseFotos(r);
+    var pcarou=fotoCarousel(pfotos,"Profil "+r.pedonNo,"#A65D37");
+    L.marker([r.latitude,r.longitude],{icon:ic}).bindPopup('<div style="min-width:170px">'+pcarou+'<b>PROFIL: '+esc(r.pedonNo)+'</b> ['+esc(r.simbol||"-")+']<br/>'+esc(r.klasUsda||"-")+'<br/>'+esc(r.lokasi||"")+'</div>').addTo(_layers.data);
     b.push([r.latitude,r.longitude]);
   });
   if(b.length){try{_map.fitBounds(b,{padding:[40,40],maxZoom:16});}catch(e){}}
