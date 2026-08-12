@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1b4d3e" />
 <link rel="apple-touch-icon" href="./icon-192.png" />
 <script>
-  window.__API_URL__ = window.__API_URL__ || "";
+  window.__API_URL__ = window.__API_URL__ || "https://script.google.com/macros/s/AKfycbyVFITOHYbGOFybmOzJzr34bPtTD7q52zJ4PcRRg61smmBklOeEhgPDkD0OHd5qGtr5Ig/exec";
   (function(){var h=location.host||"";if(h.indexOf("script.google.com")===-1&&h.indexOf("googleusercontent.com")===-1&&"serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("./sw.js").catch(function(e){console.warn("SW:",e);});});}})();
 </script>
 <style>
@@ -88,6 +88,10 @@
   #lb .lb-ctl button{width:40px;height:40px;border-radius:50%;border:none;background:rgba(255,255,255,.18);color:#fff;font-size:18px;font-weight:800;cursor:pointer}
   #lb .lb-cap{position:absolute;top:16px;left:16px;color:#fff;font-size:12px;background:rgba(0,0,0,.4);padding:6px 12px;border-radius:20px;max-width:70vw}
   .spin{display:inline-block;width:14px;height:14px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:sp 0.7s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
+  .map-label{background:rgba(27,77,62,.92);color:#fff;border:none;border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,.4);white-space:nowrap}
+  .map-label::before{border-top-color:rgba(27,77,62,.92)!important}
+  .map-label-p{background:rgba(166,93,55,.92)}
+  .map-label-p::before{border-top-color:rgba(166,93,55,.92)!important}
 </style>
 </head>
 <body>
@@ -99,12 +103,25 @@
   <div class="lb-ctl"><button onclick="lbZoom(-0.3)">−</button><button onclick="lbZoom(0.3)">+</button><button onclick="lbReset()" style="font-size:13px">⟲</button></div>
 </div>
 
+<div id="rptModal" style="position:fixed;inset:0;background:rgba(15,20,17,.85);z-index:9998;display:none;flex-direction:column;padding:0" onclick="if(event.target.id==='rptModal')rptClose()">
+  <div style="background:#1b4d3e;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:10px 14px">
+    <b id="rptTitle" style="font-size:14px">Laporan</b>
+    <div style="display:flex;gap:8px">
+      <button id="rptPrint" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer">🖨️ Cetak / PDF</button>
+      <button onclick="rptClose()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer">✕ Tutup</button>
+    </div>
+  </div>
+  <div style="flex:1;overflow:auto;background:#e5e7eb;padding:12px;display:flex;justify-content:center">
+    <div id="rptSheet" style="background:#fff;width:100%;max-width:1000px;box-shadow:0 4px 20px rgba(0,0,0,.3);padding:18px;border-radius:4px;height:fit-content"></div>
+  </div>
+</div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 "use strict";
 /* ===== KONFIGURASI ===== */
 // Untuk mode PWA/GitHub Pages: isi URL Web App (…/exec). Di Apps Script biarkan kosong.
-window.__API_URL__ = window.__API_URL__ || "https://script.google.com/macros/s/AKfycbwGcF-K-p5H7yn3W8VjeBv8DW9wvK_MgdC2NBo6ahwkdDr9kSYbU2b5xQEbD7BqYE-Saw/exec";
+window.__API_URL__ = window.__API_URL__ || "";
 
 /* ===== DATA PILIHAN (dari CSV) ===== */
 var OPSI = {"fisiografi": ["Aluvial (< 10m)", "Teras (< 10 m)", "Plain (0 - 50 m)", "Hilly (50 - 300 m)", "Mountain (> 300 m)"], "topografi": ["Flat (0 - 3 %)", "Undulating (4 - 8 %)", "Rolling (9 - 15 %)", "Moderately Steep (16 - 25 %)", "Steep (26 - 40 %)", "Very Steep (> 40 %)"], "drainase": ["Excessively (ED)", "Somewhat Excessively (SE)", "Well (WD)", "Moderately Well (MD)", "Somewhat Poorly (SP)", "Poorly (PD)", "Very Poorly (VP)", "Subaqueous (SA)", "Ponded (P)", "Flooded (F)", "Non Observed (N)", "Ocean (O)"], "hue": ["5R", "7.5R", "10R", "2.5YR", "5YR", "7.5YR", "10YR", "2.5Y", "5Y", "10Y", "5GY", "GLEY 1", "GLEY 2"], "value": ["2,5", "3", "4", "5", "6", "7", "8"], "chroma": ["1", "2", "3", "4", "6", "8"], "tekstur": ["Coarse sand", "Sand", "Fine sand", "Very fine sand", "Loamy sand", "Sandy loam", "Silt", "Silt loam", "Loam", "Sandy clay loam", "Silty clay loam", "Clay loam", "Sandy clay", "Silty clay", "Clay", "Saprik", "Hemik", "Fibrik"], "konsistensi": ["Extremely Firm", "Very Firm", "Firm - Very Firm", "Firm", "Slightly Firm - Firm", "Slightly Firm", "Friable - Slightly Firm", "Friable", "Very Friable", "Loose", "Nonsticky", "Slightly Sticky", "Moderately Sticky", "Sticky", "Very Sticky"]};
@@ -188,7 +205,7 @@ function call(fn){
         .withFailureHandler(function(e){rej(new Error(e&&e.message?e.message:String(e)));})[fn].apply(null,ja);
     } else if(api){
       if(!navigator.onLine){rej(new Error("__OFFLINE__"));return;}
-      fetch(api,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({fn:fn,args:args})})
+      fetch(api,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({fn:fn,args:args,auth:{username:(S.session&&S.session.username)||"",email:(S.session&&S.session.email)||""}})})
         .then(function(r){return r.text();}).then(function(t){
           var env=JSON.parse(t); if(!env.ok)throw new Error(env.error||"Gagal");
           var d=env.data; res(typeof d==="string"&&d?JSON.parse(d):d);
@@ -331,6 +348,7 @@ function render(){
       '<button onclick="logout()" title="Keluar" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:8px;padding:4px 8px;font-size:11px;cursor:pointer;margin-left:4px">Keluar</button>'+
     '</div>'+
   '</header>'+
+  '<div id="licBar" style="display:none;color:#fff;font-size:11px;font-weight:700;padding:7px 12px;text-align:center"></div>'+
   '<main id="main">'+viewFor(S.tab)+'</main>'+
   '<div id="toast" class="msg" style="position:fixed;bottom:80px;left:14px;right:14px;z-index:60;max-width:1150px;margin:0 auto"></div>'+
   '<nav class="bnav" style="grid-template-columns:repeat(6,1fr)">'+
@@ -350,6 +368,14 @@ function go(t){S.tab=t;render();}
 /* viewFor didefinisikan di bagian statistik (js9) agar mencakup tab Statistik */
 
 /* ===== TAB: FORM TITIK BOR ===== */
+function bannerBacaSaja(){
+  if(!bacaSaja())return "";
+  return '<div class="card" style="background:#fee2e2;border-color:#fecaca;margin-bottom:10px">'+
+    '<div style="font-weight:800;color:#b91c1c;font-size:13px">\ud83d\udd12 Mode Baca-Saja</div>'+
+    '<div style="font-size:11px;color:#444;margin-top:3px">Lisensi tidak aktif. Anda masih dapat <b>melihat, mencari, dan mencetak</b> seluruh data lama, namun penyimpanan data baru dinonaktifkan.</div>'+
+    '<button class="btn btn-p btn-full" style="margin-top:8px" onclick="go(\'sync\')">\ud83d\udd11 Aktifkan Lisensi</button>'+
+  '</div>';
+}
 function viewForm(){
   var canEdit=!S.session||S.session.role==="admin"||S.session.role==="editor";
   var f=S.form;
@@ -423,7 +449,7 @@ function viewForm(){
       (canEdit?'<button class="btn btn-p" id="btnSave" onclick="saveRecord()">💾 '+(S.editingId?"Update Record":"Simpan Record")+'</button>':'<span class="hint" style="color:#b45309">Mode viewer: tidak bisa menyimpan.</span>'))+
   '</div>';
   var steps='<div class="step-ind">'+[1,2,3,4].map(function(i){return '<div class="'+(i<=st?"on":"")+'"></div>';}).join("")+'</div>';
-  return '<div class="card">'+
+  return bannerBacaSaja()+'<div class="card">'+
     '<h3>📝 '+(S.editingId?"Edit Titik Bor":"Formulir Titik Bor")+'</h3>'+
     '<div class="sub">Langkah '+st+' dari 4 · '+["Identitas & Lokasi","Fisiografi & Lahan","Klasifikasi & Kimia","Horizon (Relasi)"][st-1]+'</div>'+
     steps+body+nav+
@@ -545,6 +571,7 @@ function ambilGPS(){
 <script>
 /* ===== SIMPAN RECORD ===== */
 function saveRecord(){
+  if(bacaSaja())return tolakTulis();
   var f=S.form;
   if(!String(f.borId).trim()){toast("Bor ID wajib diisi.","err");return;}
   if(!S.ss){toast("Spreadsheet belum terhubung. Buka tab Sync.","err");return;}
@@ -630,6 +657,7 @@ function editRecord(id){
   S.step=1;S.tab="form";render();
 }
 function delRecord(id){
+  if(bacaSaja())return tolakTulis();
   var r=S.records.filter(function(x){return x.id===id;})[0];if(!r)return;
   if(!confirm("Hapus record "+r.borId+"?"))return;
   call("deleteSurveyFromSheet",S.ss,r).catch(function(){}).then(function(){
@@ -701,6 +729,124 @@ function viewDb(){
 function list_selectAll(v){if(!S.sel)S.sel={};S.records.forEach(function(r){S.sel[r.id]=v;});var m=$("#main");if(m)m.innerHTML=viewDb();}
 
 /* ===== TAB: SYNC ===== */
+/* ===== KARTU LISENSI + INFO DATABASE OTOMATIS ===== */
+function licenseCardHTML(){
+  var L=S.lic;
+  if(!S.ss)return '<div class="card"><h3>🔑 Lisensi</h3><div class="hint">Hubungkan database terlebih dahulu untuk melihat status lisensi.</div></div>';
+  if(S._licErr)return '<div class="card"><div class="row" style="justify-content:space-between"><h3>🔑 Lisensi</h3>'+
+    '<a href="#" onclick="refreshLicense();return false" style="font-size:11px;font-weight:700">🔄 Coba lagi</a></div>'+
+    '<div style="background:#fee2e2;border-radius:10px;padding:10px;margin-top:4px">'+
+      '<div style="font-weight:800;color:#b91c1c;font-size:12px">Gagal memeriksa lisensi</div>'+
+      '<div style="font-size:11px;color:#444;margin-top:3px">'+esc(S._licErr)+'</div>'+
+      '<div class="hint" style="margin-top:6px">Bila tertulis fungsi tidak dikenal: <b>Code.gs belum diperbarui</b>. Ganti Code.gs versi terbaru lalu Deploy → New version.</div>'+
+    '</div>'+
+    '<div class="sep"><label class="lbl">Database Anda</label>'+
+      '<div style="font-size:10px;font-family:monospace;word-break:break-all;background:var(--krem);border:1px solid var(--garis);border-radius:8px;padding:8px">'+esc(S.ss)+'</div>'+
+      '<button class="btn btn-s btn-full" style="margin-top:6px;font-size:11px" onclick="salinDbId()">📋 Salin ID</button>'+
+    '</div></div>';
+  if(!L){
+    // belum ada data → picu pemeriksaan sekali, jangan menggantung
+    if(!S._licLoading)setTimeout(refreshLicense,0);
+    return '<div class="card"><div class="row" style="justify-content:space-between"><h3>🔑 Lisensi</h3>'+
+      '<a href="#" onclick="refreshLicense();return false" style="font-size:11px;font-weight:700">🔄 Periksa</a></div>'+
+      '<div class="hint">Memeriksa status lisensi… <span class="spin" style="border-color:#1b4d3e;border-top-color:transparent"></span></div>'+
+      (navigator.onLine?'':'<div class="hint" style="color:#b45309">Anda sedang offline — status lisensi diperiksa saat kembali online.</div>')+
+    '</div>';
+  }
+  var warna=L.status==="AKTIF"?"#166534":L.status==="TRIAL"?"#b45309":"#b91c1c";
+  var latar=L.status==="AKTIF"?"#dcfce7":L.status==="TRIAL"?"#fef3c7":"#fee2e2";
+  var judul=L.status==="AKTIF"?"LISENSI AKTIF":L.status==="TRIAL"?"UJI COBA":L.status==="INVALID"?"TIDAK VALID":"KEDALUWARSA";
+  return '<div class="card">'+
+    '<div class="row" style="justify-content:space-between"><h3>🔑 Lisensi & Database</h3>'+
+      '<a href="#" onclick="refreshLicense();return false" style="font-size:11px;font-weight:700">🔄 Periksa</a></div>'+
+    '<div style="background:'+latar+';border-radius:10px;padding:10px;margin-top:4px">'+
+      '<div style="font-weight:800;color:'+warna+';font-size:13px">'+judul+
+        (L.aktif&&L.sisaHari!=null?' · sisa '+L.sisaHari+' hari':'')+'</div>'+
+      '<div style="font-size:11px;color:#444;margin-top:2px">'+esc(L.pesan||"")+'</div>'+
+      (L.kedaluwarsa?'<div style="font-size:10px;color:#666;margin-top:2px">Berlaku sampai: <b>'+esc(L.kedaluwarsa)+'</b></div>':'')+
+      (L.lisensiUntuk?'<div style="font-size:10px;color:#666">Dilisensikan untuk: <b>'+esc(L.lisensiUntuk)+'</b></div>':'')+
+    '</div>'+
+    /* Info database otomatis — agar klien tidak bingung mencari Database ID */
+    '<div class="sep"><label class="lbl">Database Anda (terdeteksi otomatis)</label>'+
+      '<div style="background:var(--krem);border:1px solid var(--garis);border-radius:8px;padding:8px">'+
+        '<div style="font-size:11px"><b>Nama:</b> '+esc(L.databaseNama||"-")+'</div>'+
+        '<div style="font-size:10px;font-family:monospace;word-break:break-all;margin-top:4px"><b>Database ID:</b><br/>'+esc(L.databaseId||S.ss)+'</div>'+
+        '<div class="row" style="gap:6px;margin-top:8px">'+
+          '<button class="btn btn-s" style="flex:1;font-size:11px" onclick="salinDbId()">📋 Salin ID</button>'+
+          '<button class="btn btn-s" style="flex:1;font-size:11px" onclick="kirimDbIdWA()">💬 Kirim via WA</button>'+
+        '</div>'+
+        '<div class="hint">Kirimkan <b>Database ID</b> ini ke penyedia untuk memperoleh kunci lisensi. Kunci hanya berlaku untuk database ini.</div>'+
+      '</div>'+
+    '</div>'+
+    /* Aktivasi */
+    (L.status!=="AKTIF"||L.sisaHari<45?
+    '<div class="sep"><label class="lbl">Aktivasi / Perpanjang Lisensi</label>'+
+      '<input class="in" id="licKey" placeholder="SSGIS-XXXXXX-XXXX-XXXX-XXXX" style="font-family:monospace;text-transform:uppercase"/>'+
+      '<input class="in" id="licFor" style="margin-top:6px" placeholder="Nama perusahaan / pemegang lisensi"/>'+
+      '<button class="btn btn-p btn-full" style="margin-top:8px" onclick="doAktivasi()">🔓 Aktifkan Lisensi</button>'+
+    '</div>':'')+
+  '</div>';
+}
+/* ===== MODE BACA-SAJA (lisensi habis) ===== */
+function bacaSaja(){
+  if(S.lic&&S.lic.aktif===false)return true;
+  if(S.session&&S.session.bacaSaja===true)return true;
+  return false;
+}
+function tolakTulis(){
+  toast("Mode baca-saja: lisensi tidak aktif. Data lama tetap bisa dilihat & dicetak.","err");
+  if(S.tab!=="sync")setTimeout(function(){go("sync");},900);
+  return false;
+}
+function refreshLicense(){
+  if(!S.ss||S._licLoading)return;
+  S._licLoading=true;S._licErr="";
+  call("cekLisensi",S.ss).then(function(L){
+    S._licLoading=false;S.lic=L;S._licErr="";
+    if(S.session){S.session.bacaSaja=!L.aktif;saveSession();}
+    var m=$("#main");if(m)m.innerHTML=viewFor(S.tab);
+    licBanner();
+  }).catch(function(e){
+    S._licLoading=false;
+    var m0=e.message||"Gagal.";
+    if(/tidak dikenal|is not a function|not defined/i.test(m0))m0="Backend belum diperbarui (fungsi lisensi belum ada). Ganti Code.gs lalu Deploy versi baru.";
+    if(isOffline(e)){ S._licErr=""; }
+    else { S._licErr=m0; }
+    if(S.tab==="sync"){var m=$("#main");if(m)m.innerHTML=viewSync();}
+  });
+}
+function doAktivasi(){
+  var k=($("#licKey").value||"").trim().toUpperCase();
+  var f=($("#licFor").value||"").trim();
+  if(!k){toast("Masukkan kunci lisensi.","err");return;}
+  call("aktivasiLisensi",S.ss,{kunci:k,lisensiUntuk:f}).then(function(L){
+    S.lic=L;toast("Lisensi aktif sampai "+L.kedaluwarsa+".","ok");
+    var m=$("#main");if(m)m.innerHTML=viewSync();licBanner();
+  }).catch(function(e){toast(e.message,"err");});
+}
+function salinDbId(){
+  var t=S.ss||"";
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(function(){toast("Database ID disalin.","ok");},function(){prompt("Salin Database ID:",t);});}
+  else prompt("Salin Database ID:",t);
+}
+function kirimDbIdWA(){
+  var L=S.lic||{};
+  var pesan="Halo, saya ingin mengaktifkan lisensi Soil Survey GIS.%0A%0ANama Database: "+encodeURIComponent(L.databaseNama||"-")+"%0ADatabase ID: "+encodeURIComponent(S.ss||"-")+"%0AStatus saat ini: "+encodeURIComponent((L.status||"-")+(L.kedaluwarsa?" (s/d "+L.kedaluwarsa+")":""));
+  window.open("https://wa.me/?text="+pesan,"_blank");
+}
+/* Banner peringatan masa aktif di header */
+function licBanner(){
+  var L=S.lic;var el=$("#licBar");if(!el)return;
+  if(!L||(L.status==="AKTIF"&&L.sisaHari>14)){el.style.display="none";return;}
+  if(!L.aktif){
+    el.style.display="block";el.style.background="#b91c1c";
+    el.innerHTML='\ud83d\udd12 MODE BACA-SAJA \u2014 '+esc(L.pesan||"")+' Data lama tetap bisa dilihat & dicetak. <a href="#" onclick="go(\'sync\');return false" style="color:#fff;text-decoration:underline;font-weight:800">Aktifkan lisensi</a>';
+    return;
+  }
+  var warna=L.aktif?(L.status==="TRIAL"?"#b45309":"#b45309"):"#b91c1c";
+  el.style.display="block";el.style.background=warna;
+  el.innerHTML=esc(L.pesan||"")+(L.aktif?' <a href="#" onclick="go(\'sync\');return false" style="color:#fff;text-decoration:underline;font-weight:800">Aktifkan</a>':' <a href="#" onclick="go(\'sync\');return false" style="color:#fff;text-decoration:underline;font-weight:800">Aktifkan sekarang</a>');
+}
 function viewSync(){
   var connected=!!S.ss;
   var isAdm=isAdmin();
@@ -711,7 +857,7 @@ function viewSync(){
       var judul=u.username?('@'+esc(u.username)):esc(u.email);
       var perluSetup=!u.username;
       return '<div class="rec" style="margin-bottom:6px"><div class="row" style="justify-content:space-between"><div><b style="font-size:12px">'+judul+'</b> '+badge+(perluSetup?' <span style="font-size:9px;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:5px">perlu username</span>':'')+'<div style="font-size:10px;color:#6B6B5F">'+esc(u.nama||"")+' · '+(u.allowedPt?esc(u.allowedPt):"semua PT")+(u.noHp?' \u00b7 \ud83d\udcf1 '+esc(u.noHp):"")+(perluSetup?' \u00b7 '+esc(u.email):"")+'</div></div>'+
-        '<div><a href="#" onclick="editUser(\''+esca(u.email)+'\');return false" style="font-size:11px;font-weight:700">Edit</a> <a href="#" onclick="delUser(\''+esca(u.email)+'\');return false" style="color:#dc2626;font-size:11px;font-weight:700">🗑</a></div></div></div>';
+        '<div><a href="#" onclick="editUser(\''+esca(u.email)+'\');return false" style="font-size:11px;font-weight:700">Edit</a> <a href="#" onclick="resetDev(\''+esca(u.email)+'\');return false" style="font-size:11px;font-weight:700;color:#b45309" title="Lepas ikatan perangkat">📱</a> <a href="#" onclick="delUser(\''+esca(u.email)+'\');return false" style="color:#dc2626;font-size:11px;font-weight:700">🗑</a></div></div></div>';
     }).join("");
     userMgmt='<div class="card"><div class="row" style="justify-content:space-between"><h3>🛡️ Manajemen Pengguna (Admin)</h3><a href="#" onclick="loadUsers();return false" style="font-size:11px;font-weight:700">🔄 Muat ulang</a></div>'+
       '<input class="in" id="uNama" placeholder="Nama lengkap"/>'+
@@ -727,7 +873,7 @@ function viewSync(){
       '<div class="sep" style="text-align:center"><a href="#" onclick="showLog();return false" style="font-size:11px;font-weight:700">📋 Tampilkan Log Aktivitas</a><div id="logOut"></div></div>'+
     '</div>';
   }
-  return userMgmt+
+  return licenseCardHTML()+userMgmt+
   '<div class="card">'+
     '<h3>☁️ Penyimpanan & Google Workspace</h3><div class="sub">Hubungkan database ke Google Drive & Sheets.</div>'+
     '<label class="lbl">1. Cloud Database (Google Sheets)</label>'+
@@ -846,6 +992,27 @@ function printBor(id,paper){
   var w=window.open("","_blank");if(!w){toast("Popup diblokir.","err");return;}w.document.write(html);w.document.close();
 }
 
+/* ===== PREVIEW LAPORAN DALAM-APP (modal) ===== */
+function rptClose(){var m=$("#rptModal");if(m)m.style.display="none";var sh=$("#rptSheet");if(sh)sh.innerHTML="";}
+function showBorReport(id){
+  var r=S.records.filter(function(x){return x.id===id;})[0];if(!r)return;
+  var sh=$("#rptSheet");if(!sh)return;
+  // suntik CSS laporan sekali (scoped via <style>)
+  sh.innerHTML='<style>'+borReportCSS()+'</style>'+borReportHTML(r,false);
+  $("#rptTitle").textContent="Laporan Titik Bor · "+(r.borId||"");
+  $("#rptPrint").onclick=function(){printBor(id,'landscape');};
+  var m=$("#rptModal");if(m)m.style.display="flex";
+}
+function showProfilReport(id){
+  var sh=$("#rptSheet");if(!sh)return;
+  var body=profilReportBody(id);if(body==null){toast("Profil tidak ditemukan.","err");return;}
+  sh.innerHTML=body.css+body.html;
+  var p=(S.profils.filter(function(x){return x.id===id;})[0])||{};
+  $("#rptTitle").textContent="Laporan Profil · "+(p.pedonNo||"");
+  $("#rptPrint").onclick=function(){printProfil(id,'auto');};
+  var m=$("#rptModal");if(m)m.style.display="flex";
+}
+
 /* ===== TAB: PETA (custom layer + kolaborasi + fullscreen) ===== */
 var _map=null,_layers={},_baseLayers={},_collabTimer=null,_customLayer=null,_mbtiles=null,_extraLayers=[],_myGpsMarker=null,_myGpsCircle=null,_myGpsWatch=null;
 function viewMap(){
@@ -870,7 +1037,18 @@ function gisPanelHTML(){
   return '<div class="card" style="margin:0;background:var(--krem)">'+
     '<label class="lbl">Tipe Basemap</label>'+
     '<div class="row" style="gap:6px;flex-wrap:wrap">'+
-      bb("street","Street")+bb("sat","Satelit")+bb("topo","Topografi")+bb("sat2","Esri Sat")+
+      bb("street","Street")+bb("sat","Satelit")+bb("topo","Topografi")+bb("custom",(S.customBase&&S.customBase.nama)?esc(S.customBase.nama):"Kustom")+
+    '</div>'+
+    '<div class="sep"><label class="lbl">Basemap Kustom (XYZ / ArcGIS REST)</label>'+
+      '<input class="in" id="cbNama" placeholder="Nama basemap (mis. Citra Kebun 2025)" value="'+esca((S.customBase&&S.customBase.nama)||"")+'"/>'+
+      '<input class="in" id="cbUrl" style="margin-top:6px" placeholder="URL XYZ: https://…/{z}/{x}/{y}.png  atau ArcGIS …/MapServer" value="'+esca((S.customBase&&S.customBase.url)||"")+'"/>'+
+      '<input class="in" id="cbAttr" style="margin-top:6px" placeholder="Atribusi sumber (wajib diisi)" value="'+esca((S.customBase&&S.customBase.attr)||"")+'"/>'+
+      '<div class="row" style="gap:6px;margin-top:6px"><button class="btn btn-p" style="flex:1" onclick="saveCustomBase()">💾 Simpan Basemap</button>'+
+      (S.customBase&&S.customBase.url?'<button class="btn btn-d" onclick="clearCustomBase()">Hapus</button>':'')+'</div>'+
+      '<div class="hint">ArcGIS REST: tempel URL berakhiran <b>/MapServer</b> — otomatis diubah ke format tile. Pastikan Anda berhak memakai layanan tersebut.</div>'+
+    '</div>'+
+    '<div class="sep"><label class="lbl">Label di Peta</label>'+
+      '<label class="row" style="gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="showLabels" '+(S.showLabels?"checked":"")+' onchange="S.showLabels=this.checked;drawDataMarkers()" style="width:auto"/> Tampilkan label Bor ID / No Pedon</label>'+
     '</div>'+
     '<div class="sep"><label class="lbl">Posisi GPS Perangkat Saya</label>'+
       '<label class="row" style="gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="myGps" '+(S.myGps?"checked":"")+' onchange="toggleMyGps(this.checked)" style="width:auto"/> Tampilkan & ikuti lokasi saya di peta</label>'+
@@ -915,12 +1093,45 @@ function toggleFull(){
   }
   setTimeout(function(){if(_map)_map.invalidateSize();},150);
 }
+/* CATATAN LISENSI PETA:
+   - Tile Google (mt0.google.com/vt) TIDAK dipakai: mengambil tile langsung melanggar
+     Google Maps Platform Terms of Service. Untuk citra satelit komersial gunakan
+     Esri World Imagery (atribusi wajib) atau XYZ berbayar milik sendiri (MapTiler/Mapbox).
+   - Semua sumber di bawah bebas dipakai selama atribusi ditampilkan. */
 function baseTile(kind){
-  if(kind==="sat")return L.tileLayer("https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",{maxZoom:21,subdomains:["mt0","mt1","mt2","mt3"],attribution:"© Google"});
-  if(kind==="sat2")return L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,attribution:"© Esri"});
-  if(kind==="topo")return L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",{maxZoom:17,subdomains:["a","b","c"],attribution:"© OpenTopoMap"});
-  return L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,subdomains:["a","b","c"],attribution:"© OpenStreetMap"});
+  if(kind==="sat")return L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,attribution:"Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"});
+  if(kind==="topo")return L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",{maxZoom:17,subdomains:["a","b","c"],attribution:"Peta &copy; <a href=\"https://opentopomap.org\">OpenTopoMap</a> (CC-BY-SA) | Data &copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors"});
+  if(kind==="custom"){
+    var cu=(S.customBase&&S.customBase.url)||"";
+    if(cu)return L.tileLayer(cu,{maxZoom:22,attribution:esc((S.customBase&&S.customBase.attr)||"Sumber peta kustom")});
+    return L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,subdomains:["a","b","c"],attribution:"&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors"});
+  }
+  return L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,subdomains:["a","b","c"],attribution:"&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors"});
 }
+function saveCustomBase(){
+  var nama=($("#cbNama").value||"").trim()||"Kustom";
+  var url=($("#cbUrl").value||"").trim();
+  var attr=($("#cbAttr").value||"").trim();
+  if(!url){toast("Isi URL basemap.","err");return;}
+  if(!attr){toast("Atribusi wajib diisi (kepatuhan lisensi sumber peta).","err");return;}
+  // ArcGIS REST MapServer → format tile
+  if(/\/MapServer\/?$/i.test(url))url=url.replace(/\/+$/,"")+"/tile/{z}/{y}/{x}";
+  if(url.indexOf("{z}")===-1||url.indexOf("{x}")===-1||url.indexOf("{y}")===-1){toast("URL harus mengandung {z}/{x}/{y}.","err");return;}
+  S.customBase={nama:nama,url:url,attr:attr};
+  try{localStorage.setItem("ss_custombase",JSON.stringify(S.customBase));}catch(e){}
+  setBase("custom");toast("Basemap '"+nama+"' disimpan.","ok");refreshGisPanel();
+}
+function clearCustomBase(){
+  S.customBase=null;try{localStorage.removeItem("ss_custombase");}catch(e){}
+  if(S.base==="custom")setBase("street");
+  toast("Basemap kustom dihapus.","ok");refreshGisPanel();
+}
+function myDeviceId(){
+  try{var d=localStorage.getItem("ss_device");
+    if(!d){d="dev-"+Math.random().toString(36).slice(2,10)+"-"+Date.now().toString(36);localStorage.setItem("ss_device",d);}
+    return d;}catch(e){return "dev-nostorage";}
+}
+function loadCustomBase(){try{var j=localStorage.getItem("ss_custombase");if(j)S.customBase=JSON.parse(j);}catch(e){}}
 function setBase(k){
   S.base=k;
   if(_map){if(_baseLayers.cur)_map.removeLayer(_baseLayers.cur);_baseLayers.cur=baseTile(k).addTo(_map);_baseLayers.cur.bringToBack();}
@@ -950,7 +1161,8 @@ function drawDataMarkers(){
     var icon=L.divIcon({className:"",html:'<div style="width:16px;height:16px;border-radius:50%;background:#1b4d3e;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>',iconSize:[16,16],iconAnchor:[8,8]});
     var fotos=parseFotos(r);
     var carou=fotoCarousel(fotos,"Bor "+r.borId,"#1b4d3e");
-    L.marker([r.latitude,r.longitude],{icon:icon}).bindPopup('<div style="min-width:170px">'+carou+'<b>'+esc(r.borId)+'</b><br/>'+esc(r.perusahaan||"")+'<br/>'+esc(r.jenisTanah||"")+'<br/>'+((r.horizons||[]).length)+' horizon</div>').addTo(_layers.data);
+    var mk=L.marker([r.latitude,r.longitude],{icon:icon}).bindPopup('<div style="min-width:170px">'+carou+'<b onclick="showBorReport(\''+esca(r.id)+'\')" style="color:#1b4d3e;text-decoration:underline;cursor:pointer">'+esc(r.borId)+'</b><br/>'+esc(r.perusahaan||"")+'<br/>'+esc(r.jenisTanah||"")+'<br/>'+((r.horizons||[]).length)+' horizon<br/><button onclick="showBorReport(\''+esca(r.id)+'\')" style="margin-top:5px;background:#1b4d3e;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">📄 Lihat Laporan A4</button></div>').addTo(_layers.data);
+    if(S.showLabels)mk.bindTooltip(esc(r.borId),{permanent:true,direction:"top",offset:[0,-8],className:"map-label"});
     b.push([r.latitude,r.longitude]);
   });
   S.profils.forEach(function(r){
@@ -958,7 +1170,8 @@ function drawDataMarkers(){
     var ic=L.divIcon({className:"",html:'<div style="width:18px;height:18px;background:#A65D37;border:2px solid #fff;border-radius:4px;color:#fff;font:bold 11px/14px sans-serif;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.4)">P</div>',iconSize:[18,18],iconAnchor:[9,9]});
     var pfotos=parseFotos(r);
     var pcarou=fotoCarousel(pfotos,"Profil "+r.pedonNo,"#A65D37");
-    L.marker([r.latitude,r.longitude],{icon:ic}).bindPopup('<div style="min-width:170px">'+pcarou+'<b>PROFIL: '+esc(r.pedonNo)+'</b> ['+esc(r.simbol||"-")+']<br/>'+esc(r.klasUsda||"-")+'<br/>'+esc(r.lokasi||"")+'</div>').addTo(_layers.data);
+    var pmk=L.marker([r.latitude,r.longitude],{icon:ic}).bindPopup('<div style="min-width:170px">'+pcarou+'<b onclick="showProfilReport(\''+esca(r.id)+'\')" style="color:#A65D37;text-decoration:underline;cursor:pointer">PROFIL: '+esc(r.pedonNo)+'</b> ['+esc(r.simbol||"-")+']<br/>'+esc(r.klasUsda||"-")+'<br/>'+esc(r.lokasi||"")+'<br/><button onclick="showProfilReport(\''+esca(r.id)+'\')" style="margin-top:5px;background:#A65D37;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">📄 Lihat Laporan A4</button></div>').addTo(_layers.data);
+    if(S.showLabels)pmk.bindTooltip(esc(r.pedonNo),{permanent:true,direction:"top",offset:[0,-8],className:"map-label map-label-p"});
     b.push([r.latitude,r.longitude]);
   });
   if(b.length){try{_map.fitBounds(b,{padding:[40,40],maxZoom:16});}catch(e){}}
@@ -1278,7 +1491,11 @@ function boot(){
   try{ loadLocal(); loadPLocal(); loadSession(); }catch(e){}
   // Sudah ada sesi tersimpan? Langsung masuk (tanpa wajib server → bisa OFFLINE).
   try{
-    if(S.session&&S.session.username&&S.ss){ S._gate=false; S.tab="form"; boot2(); if(navigator.onLine)syncPending(); return; }
+    if(S.session&&S.session.username&&S.ss){ S._gate=false; S.tab="form"; loadCustomBase(); boot2(); jadwalCekLisensi();
+      if(navigator.onLine){
+        try{ call("setAuthHint",S.ss,{username:S.session.username,email:S.session.email}).catch(function(){}); }catch(e){}
+        validasiSesi(); syncPending(); refreshLicense();
+      } return; }
     showLogin();
   }catch(e){ $("#app").innerHTML='<div style="padding:40px;text-align:center;color:#900">Gagal memuat UI: '+(e&&e.message||e)+'</div>'; }
 }
@@ -1306,7 +1523,7 @@ function viewProfil(){
   if(S.pForm._openDb) return viewProfilDb();
   var canEdit=!S.session||S.session.role==="admin"||S.session.role==="editor";
   var f=S.pForm;
-  return '<div class="card">'+
+  return bannerBacaSaja()+'<div class="card">'+
     '<div class="row" style="justify-content:space-between"><h3>🧱 '+(S.pEditingId?"Edit Profil":"Formulir Profil Tanah")+'</h3>'+
       '<button class="chip" onclick="S.pForm._openDb=true;render()">🗂️ Database Profil</button></div>'+
     '<div class="sub">Deskripsi profil pedon + hasil lab per kedalaman. Kolom fisiografi/drainase: combo CSV.</div>'+
@@ -1430,6 +1647,7 @@ function preset2Tier(){var a=emptyLab();a.depthFrom=0;a.depthTo=50;var b=emptyLa
 <script>
 /* ===== SIMPAN / MUAT PROFIL ===== */
 function saveProfil(){
+  if(bacaSaja())return tolakTulis();
   var f=S.pForm;
   if(!String(f.pedonNo).trim()){toast("Pedon No wajib diisi.","err");return;}
   if(!S.ss){toast("Spreadsheet belum terhubung.","err");return;}
@@ -1465,6 +1683,7 @@ function editProfil(id){
   S.tab="profil";render();
 }
 function delProfil(id){
+  if(bacaSaja())return tolakTulis();
   var r=S.profils.filter(function(x){return x.id===id;})[0];if(!r)return;
   if(!confirm("Hapus profil "+r.pedonNo+"?"))return;
   call("deleteProfilFromSheet",S.ss,id).catch(function(){}).then(function(){S.profils=S.profils.filter(function(x){return x.id!==id;});savePLocal();toast("Profil dihapus.","ok");render();});
@@ -1520,8 +1739,8 @@ function vv(x){return (x===""||x==null||isNaN(+x))?"-":(+x);}
 
 <script>
 /* ===== PDF LAPORAN PROFIL ===== */
-function printProfil(id,paper){
-  var p=S.profils.filter(function(x){return x.id===id;})[0];if(!p)return;
+function buildProfilReport(id,paper){
+  var p=S.profils.filter(function(x){return x.id===id;})[0];if(!p)return null;
   var gambut=isGambut(p);
   paper=paper||'auto';
   var lab=(p.labRows||[]).slice().sort(function(a,b){return a.depthFrom-b.depthFrom;});
@@ -1562,7 +1781,7 @@ function printProfil(id,paper){
   }
   var hasFoto=p.foto&&/^data:|^https?:/.test(p.foto);
   var fotoImg=hasFoto?'<img src="'+esca(p.foto)+'" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" style="max-width:100%;max-height:'+(lab.length?"600px":"620px")+';object-fit:contain;border:1px solid #999;border-radius:4px"/>':"";
-  var html='<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"/><title>Laporan Profil '+esc(p.pedonNo)+'</title><style>'+
+  var cssStr='<style>'+
     ''+(paper==="portrait"?"@page{size:A4 portrait;margin:14mm}":paper==="landscape"?"@page{size:A4 landscape;margin:12mm}":(lab.length?"@page{size:A4 landscape;margin:12mm}":"@page{size:A4 portrait;margin:14mm}"))+'*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{font-family:Inter,Arial,sans-serif;font-size:11px;color:#111;margin:0}'+
     'h1{text-align:center;font-size:15px;margin:0 0 2px}.sub{text-align:center;font-size:9px;color:#555;border-bottom:2px solid #1b4d3e;padding-bottom:6px;margin-bottom:12px}'+
     'table.info{border-collapse:collapse}table.info td{padding:1.5px 4px;vertical-align:top}table.info td.k{width:150px;font-weight:600}'+
@@ -1573,8 +1792,8 @@ function printProfil(id,paper){
     '.kimia-foto{display:flex;gap:16px;align-items:flex-start}.kimia-kiri{flex:0 0 auto}.foto-kanan{flex:1;text-align:center}'+
     'table.karak td.merged{text-align:center;font-weight:600}'+
     '.sign{margin-top:24px;display:flex;justify-content:flex-end;text-align:center}.sign-name{margin-top:52px;font-weight:700;text-decoration:underline}.sign-role{font-size:9px;color:#555}'+
-    '</style></head><body>'+
-    '<h1>LAPORAN DESKRIPSI PROFIL TANAH</h1><div class="sub">'+esc(p.lokasi||"")+'</div>'+
+    '</style>';
+  var bodyStr='<h1>LAPORAN DESKRIPSI PROFIL TANAH</h1><div class="sub">'+esc(p.lokasi||"")+'</div>'+
     '<table class="info">'+baris("Pedon No",p.pedonNo)+baris("Simbol",p.simbol)+baris("Klasifikasi (USDA)",p.klasUsda)+baris("Klasifikasi (FAO)",p.klasFao)+baris("Klasifikasi (PPT)",p.klasPpt)+baris("Lokasi",p.lokasi)+baris("Fisiografi",p.fisiografi)+baris("Ketinggian",p.ketinggian?p.ketinggian+" m dpl":"")+baris("Kemiringan",p.kemiringan?p.kemiringan+" %":"")+baris("Vegetasi",p.vegetasi)+baris("Bahan Induk",p.bahanInduk)+baris("Drainase",p.drainase)+baris("Kelembaban Tanah",p.kelembaban)+baris("Muka Air Tanah",p.mukaAir)+baris("Batuan",p.batuan)+baris("Erosi",p.erosi)+baris("Surveyor",p.surveyor)+baris("Tanggal",p.tanggal)+'</table>'+
     '<div class="desc">Deskripsi Profil :</div>'+
     '<table class="hz"><thead><tr><th style="width:70px">Horizon</th><th style="width:90px">Kedalaman (cm)</th><th>Deskripsi</th></tr></thead><tbody>'+(hzRows||'<tr><td colspan="3">-</td></tr>')+'</tbody></table>'+
@@ -1583,7 +1802,14 @@ function printProfil(id,paper){
       '<div class="kimia-kiri">'+chem+'</div>'+
       (fotoImg?'<div class="foto-kanan"><div class="ttl2">Gambar Profil '+esc(p.pedonNo)+'</div>'+fotoImg+'</div>':'')+
     '</div></div>':"")+
-    '<div class="sign"><div>Surveyor Tanah,<div class="sign-name">'+esc(p.surveyor||"________________")+'</div><div class="sign-role">Surveyor Lapangan</div></div></div>'+
+    '<div class="sign"><div>Surveyor Tanah,<div class="sign-name">'+esc(p.surveyor||"________________")+'</div><div class="sign-role">Surveyor Lapangan</div></div></div>';
+  return {css:cssStr, html:bodyStr};
+}
+function profilReportBody(id){return buildProfilReport(id,'auto');}
+function printProfil(id,paper){
+  var p=S.profils.filter(function(x){return x.id===id;})[0];if(!p)return;
+  var R=buildProfilReport(id,paper);if(!R)return;
+  var html='<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"/><title>Laporan Profil '+esc(p.pedonNo)+'</title>'+R.css+'</head><body>'+R.html+
     '<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>';
   var w=window.open("","_blank");if(!w){toast("Popup diblokir.","err");return;}w.document.write(html);w.document.close();
 }
@@ -1716,6 +1942,7 @@ function genInsight(){
 function _auth(){var ss=S.session||{};return {_authUser:ss.username||"",_authEmail:ss.email||""};}
 function loadUsers(){if(!S.ss)return;call("listUsers",S.ss,{username:(S.session&&S.session.username)||"",email:(S.session&&S.session.email)||""}).then(function(l){S.users=l||[];var m=$("#main");if(m&&S.tab==="sync")m.innerHTML=viewSync();}).catch(function(e){toast(e.message,"err");});}
 function saveUser(){
+  if(bacaSaja())return tolakTulis();
   var uname=($("#uUser").value||"").trim().toLowerCase();
   var editEmail=($("#uEmailEdit")&&$("#uEmailEdit").value||"").trim().toLowerCase();
   if(!uname){toast("Username wajib diisi.","err");return;}
@@ -1741,6 +1968,10 @@ function editUser(email){var u=(S.users||[]).filter(function(x){return x.email==
   if($("#uHp"))$("#uHp").value=u.noHp||"";
   if($("#uAktif"))$("#uAktif").checked=String(u.aktif||"YA").toUpperCase().indexOf("Y")===0;
   window.scrollTo(0,0);toast("Mengedit "+(u.username||u.email)+". Kosongkan password bila tak diubah.","info");}
+function resetDev(email){
+  if(!confirm("Lepas ikatan perangkat untuk "+email+"?\n\nPengguna dapat login di perangkat baru setelah ini."))return;
+  call("resetDevice",S.ss,Object.assign({email:email},_auth())).then(function(){toast("Ikatan perangkat dilepas.","ok");loadUsers();}).catch(function(e){toast(e.message,"err");});
+}
 function delUser(email){if(!confirm("Hapus pengguna "+email+"?"))return;call("deleteUser",S.ss,Object.assign({email:email},_auth())).then(function(){toast("Pengguna dihapus.","ok");loadUsers();}).catch(function(e){toast(e.message,"err");});}
 function resetDev(email){if(!confirm("Reset ikatan perangkat untuk "+email+"? Pengguna bisa login dari HP baru."))return;call("resetDevice",S.ss,email).then(function(){toast("Perangkat direset.","ok");}).catch(function(e){toast(e.message,"err");});}
 function showLog(){call("fetchActivityLog",S.ss,{username:(S.session&&S.session.username)||"",email:(S.session&&S.session.email)||""}).then(function(l){var rows=(l||[]).slice(0,30).map(function(x){return '<div style="font-size:10px;padding:4px 0;border-bottom:1px solid var(--krem2)"><b>'+esc(x.aksi||x.action||"")+'</b> · '+esc(x.email||"")+' · <span style="color:#8f8f80">'+esc(String(x.waktu||x.time||"").replace("T"," ").slice(0,16))+'</span></div>';}).join("");var o=$("#logOut");if(o)o.innerHTML='<div style="margin-top:8px;text-align:left;max-height:220px;overflow-y:auto">'+(rows||'<div class="hint">Log kosong.</div>')+'</div>';}).catch(function(e){toast(e.message,"err");});}
@@ -1850,6 +2081,7 @@ function printGabungan(){
 /* ===== SINKRONISASI DATA PENDING (offline → online) ===== */
 function pendingCount(){return (S.records||[]).filter(function(r){return r.syncStatus!=="synced";}).length+(S.profils||[]).filter(function(r){return r.syncStatus&&r.syncStatus!=="synced";}).length;}
 function syncPending(){
+  if(bacaSaja())return;
   if(!navigator.onLine||!S.ss)return;
   var pend=(S.records||[]).filter(function(r){return r.syncStatus!=="synced";});
   if(!pend.length){return;}
@@ -1933,6 +2165,11 @@ function viewLogin(msg,mode){
           '</div>'
         )
       )+
+      (S.ss?'<div style="margin-top:14px;background:var(--krem);border:1px solid var(--garis);border-radius:8px;padding:8px">'+
+        '<div style="font-size:9px;font-weight:800;letter-spacing:.5px;color:#8f8f80">DATABASE TERHUBUNG</div>'+
+        '<div style="font-size:10px;font-family:monospace;word-break:break-all;color:#5a5a52;margin-top:2px">'+esc(S.ss)+'</div>'+
+        '<div style="font-size:10px;color:#8f8f80;margin-top:3px">Pastikan ID ini <b>sama</b> dengan yang dipakai di perangkat lain. Bila berbeda, akun Anda tidak akan ditemukan.</div>'+
+      '</div>':'')+
       '<div style="text-align:center;font-size:10px;color:#8f8f80;margin-top:16px">Login offline tersedia setelah pernah masuk online.</div>'+
     '</div>'+
   '</div>';
@@ -1978,17 +2215,37 @@ function doLogin(){
   if(!u||!p){toast("Isi username & password.","err");return;}
   // OFFLINE: verifikasi dgn sesi tersimpan (hash lokal) bila ada
   if(!navigator.onLine){
-    if(S.session&&S.session.username===u&&S.session._h&&S.session._h===hashLite(p)){enterApp();return;}
+    if(S.session&&S.session.username===u&&S.session._h&&S.session._h===hashLite(p)){
+      var terakhir=S.session._lastOk||0;
+      // Sesi offline berlaku maksimal 14 hari sejak terakhir diverifikasi online
+      if(terakhir&&(Date.now()-terakhir)>14*86400000){
+        showLogin("Sesi offline sudah lebih dari 14 hari. Sambungkan internet sekali untuk verifikasi akun.","err");return;
+      }
+      enterApp();return;
+    }
     showLogin("Offline: hanya bisa login dgn akun terakhir yang pernah online di perangkat ini.","err");return;
   }
   var btn=event&&event.target;if(btn){btn.disabled=true;btn.textContent="Memeriksa…";}
-  call("loginUsername",S.ss,{username:u,password:p}).then(function(sess){
+  call("loginUsername",S.ss,{username:u,password:p,deviceId:myDeviceId()}).then(function(sess){
     if(!sess||!sess.ok){throw new Error("Login gagal.");}
     sess._h=hashLite(p); // simpan verifier ringan utk login offline berikutnya
-    S.session=sess;saveSession();enterApp();
+    sess._lastOk=Date.now();
+    S.session=sess;saveSession();
+    try{ call("setAuthHint",S.ss,{username:sess.username,email:sess.email})
+      .then(function(){ try{ if(window.jxRefreshMe)window.jxRefreshMe(); }catch(e2){} })
+      .catch(function(){}); }catch(e){}
+    enterApp();
   }).catch(function(e){
     if(btn){btn.disabled=false;btn.textContent="🔓 Masuk";}
-    showLogin(e.message||"Login gagal.","err");
+    var m=e.message||"Login gagal.";
+    if(/tidak dikenal|is not a function|not defined/i.test(m)){
+      m="Backend belum diperbarui. Ganti Code.gs versi terbaru lalu Deploy → New version.";
+    } else if(/username tidak ditemukan/i.test(m)){
+      m="Username tidak ada di database yang terhubung di perangkat INI. Penyebab paling umum: perangkat ini terhubung ke database yang BERBEDA. Bandingkan Database ID di bawah dengan perangkat lain; bila berbeda, tekan 'Ganti database' lalu tempel ID yang benar.";
+    } else if(/terikat pada perangkat lain/i.test(m)){
+      m=m+" (Satu akun hanya untuk satu perangkat.)";
+    }
+    showLogin(m,"err");
   });
 }
 // hash ringan (non-kriptografis) hanya utk verifikasi login OFFLINE lokal
@@ -1997,11 +2254,53 @@ function hashLite(s){var h=5381;for(var i=0;i<s.length;i++){h=((h<<5)+h)+s.charC
 function logout(){
   if(!confirm("Keluar dari aplikasi?"))return;
   // hentikan berbagi posisi agar tidak tertinggal di peta rekan
-  try{ if(S.ss&&navigator.onLine)call("stopSharing",S.ss,{deviceId:(localStorage.getItem("ss_device")||""),email:(S.session&&S.session.email)||""}).catch(function(){}); }catch(e){}
-  clearSession();S.session=null;S._gate=true;
+  try{ if(S.ss&&navigator.onLine){
+    call("stopSharing",S.ss,{deviceId:myDeviceId(),email:(S.session&&S.session.email)||""}).catch(function(){});
+    call("setAuthHint",S.ss,{username:"",email:""}).catch(function(){});
+  } }catch(e){}
+  clearSession();S.session=null;S._gate=true;S.lic=null;
+  try{ if(window.jxRefreshMe)window.jxRefreshMe(); }catch(e){}
   showLogin("Anda telah keluar.","info");
 }
-function enterApp(){S._gate=false;S.tab="form";saveSession();boot2();syncPending();}
+/* Verifikasi sesi tersimpan ke server: akun dihapus/dinonaktifkan/pindah perangkat
+   akan dikeluarkan otomatis. Saat offline, verifikasi ditunda (tidak mengganggu lapangan). */
+function validasiSesi(){
+  if(!S.ss||!S.session||!S.session.username||!navigator.onLine)return;
+  if(S._valLoading)return; S._valLoading=true;
+  call("validasiAkun",S.ss,{username:S.session.username,email:S.session.email,deviceId:myDeviceId()})
+  .then(function(v){
+    S._valLoading=false;
+    if(!v)return;
+    if(v.ok===false){
+      var alasan=v.pesan||"Sesi tidak berlaku lagi.";
+      try{ if(S._licTimer){clearInterval(S._licTimer);S._licTimer=null;} }catch(e){}
+      clearSession();S.session=null;S._gate=true;S.lic=null;
+      showLogin(alasan+" Silakan masuk kembali.","err");
+      return;
+    }
+    // segarkan data sesi (peran/nama/foto bisa diubah admin)
+    var h=S.session._h;
+    S.session=Object.assign({},S.session,v,{ok:true,_h:h,_lastOk:Date.now()});
+    saveSession();
+    if(S.lic)S.lic.aktif=!v.bacaSaja;
+    try{ if(window.jxRefreshMe)window.jxRefreshMe(); }catch(e){}
+    licBanner();
+  }).catch(function(){ S._valLoading=false; });
+}
+function jadwalCekLisensi(){
+  if(S._licTimer)return;
+  // periksa ulang tiap 6 jam agar sesi lama tidak lolos selamanya
+  S._licTimer=setInterval(function(){ if(navigator.onLine){refreshLicense();validasiSesi();} }, 60*60*1000);
+  window.addEventListener("online",function(){ refreshLicense(); validasiSesi(); });
+  document.addEventListener("visibilitychange",function(){
+    if(document.visibilityState==="visible"&&navigator.onLine){
+      var last=S._licLast||0;
+      if(Date.now()-last>30*60*1000){ S._licLast=Date.now(); refreshLicense(); validasiSesi(); }
+    }
+  });
+  S._licLast=Date.now();
+}
+function enterApp(){S._gate=false;S.tab="form";saveSession();loadCustomBase();boot2();syncPending();refreshLicense();jadwalCekLisensi();}
 try{window.saveSession=saveSession;window.S=S;}catch(e){}
 
 </script>
@@ -2211,16 +2510,30 @@ try{window.saveSession=saveSession;window.S=S;}catch(e){}
       if (appSess0 && appSess0.username) { return Promise.resolve(appSess0); }
       return call("getSessionInfo", SS || "").catch(function(){ return appSess0 || {}; });
     }).then(function (s) {
+      terapkanME(s);
+    }).catch(function (e) { $("jx-ident").textContent = "Gagal memuat sesi: " + e.message; });
+  }
+
+  /* Terapkan identitas ke panel. Dipanggil ulang setiap panel dibuka & saat sesi berubah,
+     agar profil selalu mengikuti akun yang SEDANG login (bukan akun sebelumnya). */
+  function terapkanME(s) {
       ME = s || (window.S && window.S.session) || {};
       $("jx-ident").textContent = (ME.name || "Pengguna") + (ME.email ? " · " + ME.email : "");
       $("jx-role").textContent = "Peran: " + String(ME.role || "-").toUpperCase() +
         (ME.allowedPt && ME.allowedPt.length ? " · PT: " + ME.allowedPt.join(", ") : " · semua PT");
       $("jx-nama").value = ME.name || "";
       $("jx-jabatan").value = ME.jabatan || "";
-      if (ME.foto) setFoto(ME.foto);
+      setFoto(ME.foto || "");
       if (SS) loadMyTtd();
-    }).catch(function (e) { $("jx-ident").textContent = "Gagal memuat sesi: " + e.message; });
   }
+
+  /* Segarkan identitas panel dari sesi aplikasi terkini. */
+  window.jxRefreshMe = function () {
+    SS = (window.S && window.S.ss) ? window.S.ss : SS;
+    var sess = (window.S && window.S.session) ? window.S.session : null;
+    if (sess && sess.username) { terapkanME(sess); return; }
+    call("getSessionInfo", SS || "").then(terapkanME).catch(function(){});
+  };
 
   function loadMyTtd() {
     call("fetchSignatures", SS, { personalOnly: true, username: (ME && ME.username) || "", email: (ME && ME.email) || "" }).then(function (list) {
@@ -2496,6 +2809,7 @@ try{window.saveSession=saveSession;window.S=S;}catch(e){}
   /* ---------- UI ---------- */
   $("jx-fab").addEventListener("click", function () {
     $("jx-modal").style.display = "flex";
+    try { window.jxRefreshMe(); } catch (e) {}
     setTimeout(padInit, 80);
     mapInit();
     setTimeout(function () { if (map) map.invalidateSize(); }, 250);
