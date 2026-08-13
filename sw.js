@@ -16,6 +16,11 @@ self.addEventListener("activate", function (e) {
 });
 self.addEventListener("fetch", function (e) {
   var req = e.request, url = req.url;
+  // JANGAN cache ubin peta: kebijakan OpenStreetMap/OpenTopoMap melarang prefetch
+  // & penyimpanan luring. Untuk peta luring gunakan fitur MBTiles milik pengguna.
+  var UBIN = ["tile.openstreetmap.org", "tile.osm.org", "tile.opentopomap.org",
+              "api.maptiler.com", "api.mapbox.com", "arcgisonline.com", "ibasemaps-api.arcgis.com"];
+  for (var t = 0; t < UBIN.length; t++) { if (url.indexOf(UBIN[t]) !== -1) return; }
   if (req.method === "POST" || url.indexOf("script.google.com") !== -1 || url.indexOf("googleusercontent.com") !== -1 || url.indexOf("cdnjs.cloudflare.com") !== -1 || url.indexOf("unpkg.com") !== -1 || url.indexOf("api.anthropic.com") !== -1) return;
   if (req.mode === "navigate") {
     e.respondWith(fetch(req).then(function (r) {

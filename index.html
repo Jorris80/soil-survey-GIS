@@ -1039,6 +1039,19 @@ function gisPanelHTML(){
     '<div class="row" style="gap:6px;flex-wrap:wrap">'+
       bb("street","Street")+bb("sat","Satelit")+bb("topo","Topografi")+bb("custom",(S.customBase&&S.customBase.nama)?esc(S.customBase.nama):"Kustom")+
     '</div>'+
+    '<div class="sep"><label class="lbl">Citra Satelit (kunci milik Anda)</label>'+
+      '<select class="in" id="spJenis" onchange="spHint()">'+
+        '<option value="maptiler">MapTiler Satellite</option>'+
+        '<option value="mapbox">Mapbox Satellite</option>'+
+        '<option value="arcgis">ArcGIS (langganan Anda)</option>'+
+        '<option value="manual">XYZ manual</option>'+
+      '</select>'+
+      '<input class="in" id="spKey" style="margin-top:6px" placeholder="Tempel API key / token / URL"/>'+
+      '<div class="hint" id="spHint">MapTiler: daftar gratis di maptiler.com, salin API key Anda.</div>'+
+      '<div class="row" style="gap:6px;margin-top:6px"><button class="btn btn-p" style="flex:1" onclick="simpanSat()">💾 Simpan Kunci</button>'+
+      (satProvider()?'<button class="btn btn-d" onclick="hapusSat()">Hapus</button>':'')+'</div>'+
+      '<div class="hint" style="color:#92400e">Citra satelit tidak disertakan bawaan karena ketentuan penyedia melarang pemakaian komersial tanpa lisensi. Gunakan akun berlisensi milik Anda sendiri.</div>'+
+    '</div>'+
     '<div class="sep"><label class="lbl">Basemap Kustom (XYZ / ArcGIS REST)</label>'+
       '<input class="in" id="cbNama" placeholder="Nama basemap (mis. Citra Kebun 2025)" value="'+esca((S.customBase&&S.customBase.nama)||"")+'"/>'+
       '<input class="in" id="cbUrl" style="margin-top:6px" placeholder="URL XYZ: https://…/{z}/{x}/{y}.png  atau ArcGIS …/MapServer" value="'+esca((S.customBase&&S.customBase.url)||"")+'"/>'+
@@ -1093,20 +1106,66 @@ function toggleFull(){
   }
   setTimeout(function(){if(_map)_map.invalidateSize();},150);
 }
-/* CATATAN LISENSI PETA:
-   - Tile Google (mt0.google.com/vt) TIDAK dipakai: mengambil tile langsung melanggar
-     Google Maps Platform Terms of Service. Untuk citra satelit komersial gunakan
-     Esri World Imagery (atribusi wajib) atau XYZ berbayar milik sendiri (MapTiler/Mapbox).
-   - Semua sumber di bawah bebas dipakai selama atribusi ditampilkan. */
+/* ============================================================================
+   CATATAN KEPATUHAN LISENSI PETA DASAR
+   - Google (mt0.google.com/vt): TIDAK dipakai — melanggar Google Maps ToS.
+   - Esri World Imagery (server.arcgisonline.com): TIDAK dipakai sebagai bawaan —
+     Esri Terms of Use melarang pemakaian komersial tanpa lisensi ArcGIS.
+   - Citra satelit kini memakai KUNCI MILIK PENGGUNA (MapTiler/Mapbox/ArcGIS),
+     sehingga kepatuhan berada pada akun berlisensi milik pengguna sendiri.
+   - OSM & OpenTopoMap: bebas dipakai dengan atribusi; server komunitas berkapasitas
+     terbatas, jadi untuk pemakaian intensif sebaiknya pindah ke penyedia berbayar
+     melalui Basemap Kustom.
+   ========================================================================== */
+function satProvider(){
+  try{ var j=localStorage.getItem("ss_satkey"); if(j)return JSON.parse(j); }catch(e){}
+  return null;
+}
 function baseTile(kind){
-  if(kind==="sat")return L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,attribution:"Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"});
+  if(kind==="sat"){
+    var sp=satProvider();
+    if(sp&&sp.url){
+      return L.tileLayer(sp.url,{maxZoom:sp.maxZoom||20,attribution:sp.attr||"Citra satelit (lisensi pengguna)"});
+    }
+    // Belum dikonfigurasi → jangan memuat sumber berlisensi; pakai OSM & beri tahu.
+    setTimeout(function(){ if(!S._satWarn){S._satWarn=true;toast("Satelit belum dikonfigurasi. Buka Layer → Citra Satelit untuk memasang kunci Anda.","info");} },300);
+    return L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,subdomains:["a","b","c"],attribution:"&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors"});
+  }
   if(kind==="topo")return L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",{maxZoom:17,subdomains:["a","b","c"],attribution:"Peta &copy; <a href=\"https://opentopomap.org\">OpenTopoMap</a> (CC-BY-SA) | Data &copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors"});
   if(kind==="custom"){
     var cu=(S.customBase&&S.customBase.url)||"";
     if(cu)return L.tileLayer(cu,{maxZoom:22,attribution:esc((S.customBase&&S.customBase.attr)||"Sumber peta kustom")});
-    return L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,subdomains:["a","b","c"],attribution:"&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors"});
   }
   return L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,subdomains:["a","b","c"],attribution:"&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors"});
+}
+function spHint(){
+  var t=($("#spJenis")||{}).value;var h=$("#spHint");if(!h)return;
+  var m={
+    maptiler:"MapTiler: daftar gratis di maptiler.com, salin API key Anda.",
+    mapbox:"Mapbox: buat access token di account.mapbox.com (dimulai dengan pk.).",
+    arcgis:"ArcGIS: tempel API key dari langganan ArcGIS Anda (developers.arcgis.com).",
+    manual:"XYZ manual: tempel URL lengkap berisi {z}/{x}/{y} beserta kunci Anda."
+  };
+  h.textContent=m[t]||"";
+}
+function simpanSat(){
+  var t=($("#spJenis")||{}).value;var k=($("#spKey").value||"").trim();
+  if(!k){toast("Tempel API key / URL terlebih dahulu.","err");return;}
+  var p=null;
+  if(t==="maptiler")p={url:"https://api.maptiler.com/tiles/satellite-v2/{z}/{x}/{y}.jpg?key="+encodeURIComponent(k),maxZoom:20,attr:'&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'};
+  else if(t==="mapbox")p={url:"https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token="+encodeURIComponent(k),maxZoom:20,attr:'&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'};
+  else if(t==="arcgis")p={url:"https://ibasemaps-api.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?token="+encodeURIComponent(k),maxZoom:19,attr:"Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics"};
+  else {
+    if(k.indexOf("{z}")===-1||k.indexOf("{x}")===-1||k.indexOf("{y}")===-1){toast("URL harus mengandung {z}/{x}/{y}.","err");return;}
+    p={url:k,maxZoom:22,attr:"Citra satelit (sumber & lisensi milik pengguna)"};
+  }
+  try{localStorage.setItem("ss_satkey",JSON.stringify(p));}catch(e){}
+  S._satWarn=false;setBase("sat");toast("Citra satelit aktif.","ok");refreshGisPanel();
+}
+function hapusSat(){
+  try{localStorage.removeItem("ss_satkey");}catch(e){}
+  if(S.base==="sat")setBase("street");
+  toast("Kunci satelit dihapus.","ok");refreshGisPanel();
 }
 function saveCustomBase(){
   var nama=($("#cbNama").value||"").trim()||"Kustom";
