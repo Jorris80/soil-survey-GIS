@@ -127,6 +127,19 @@ window.__API_URL__ = window.__API_URL__ || "";
 var OPSI = {"fisiografi": ["Aluvial (< 10m)", "Teras (< 10 m)", "Plain (0 - 50 m)", "Hilly (50 - 300 m)", "Mountain (> 300 m)"], "topografi": ["Flat (0 - 3 %)", "Undulating (4 - 8 %)", "Rolling (9 - 15 %)", "Moderately Steep (16 - 25 %)", "Steep (26 - 40 %)", "Very Steep (> 40 %)"], "drainase": ["Excessively (ED)", "Somewhat Excessively (SE)", "Well (WD)", "Moderately Well (MD)", "Somewhat Poorly (SP)", "Poorly (PD)", "Very Poorly (VP)", "Subaqueous (SA)", "Ponded (P)", "Flooded (F)", "Non Observed (N)", "Ocean (O)"], "hue": ["5R", "7.5R", "10R", "2.5YR", "5YR", "7.5YR", "10YR", "2.5Y", "5Y", "10Y", "5GY", "GLEY 1", "GLEY 2"], "value": ["2,5", "3", "4", "5", "6", "7", "8"], "chroma": ["1", "2", "3", "4", "6", "8"], "tekstur": ["Coarse sand", "Sand", "Fine sand", "Very fine sand", "Loamy sand", "Sandy loam", "Silt", "Silt loam", "Loam", "Sandy clay loam", "Silty clay loam", "Clay loam", "Sandy clay", "Silty clay", "Clay", "Saprik", "Hemik", "Fibrik"], "konsistensi": ["Extremely Firm", "Very Firm", "Firm - Very Firm", "Firm", "Slightly Firm - Firm", "Slightly Firm", "Friable - Slightly Firm", "Friable", "Very Friable", "Loose", "Nonsticky", "Slightly Sticky", "Moderately Sticky", "Sticky", "Very Sticky"]};
 
 /* ===== STATE ===== */
+/* ===== IDENTITAS & VERSI APLIKASI ===== */
+var APP = {
+  nama: "Soil Survey GIS",
+  versi: "1.4.0",
+  build: "2026-08-28",
+  penyedia: "",            // diisi penyedia: nama badan usaha
+  kontak: "",              // diisi penyedia: email / WhatsApp dukungan
+  pustaka: [
+    { n: "Leaflet 1.9.4", l: "BSD-2-Clause", c: "\u00a9 2010-2024 Volodymyr Agafonkin, CloudMade" },
+    { n: "shpjs", l: "MIT", c: "\u00a9 Calvin Metcalf" },
+    { n: "sql.js", l: "MIT", c: "\u00a9 Ophir Lojkine & kontributor" }
+  ]
+};
 var S = {
   ss: "", session: null, online: navigator.onLine,
   tab: "form", step: 1,
@@ -847,6 +860,129 @@ function licBanner(){
   el.style.display="block";el.style.background=warna;
   el.innerHTML=esc(L.pesan||"")+(L.aktif?' <a href="#" onclick="go(\'sync\');return false" style="color:#fff;text-decoration:underline;font-weight:800">Aktifkan</a>':' <a href="#" onclick="go(\'sync\');return false" style="color:#fff;text-decoration:underline;font-weight:800">Aktifkan sekarang</a>');
 }
+/* ===== TENTANG APLIKASI · S&K · KEBIJAKAN PRIVASI ===== */
+function aboutCardHTML(){
+  var lib=APP.pustaka.map(function(x){return '<div style="font-size:10px;color:#6B6B5F">'+esc(x.n)+' \u2014 '+esc(x.l)+'</div>';}).join("");
+  return '<div class="card">'+
+    '<h3>\u2139\ufe0f Tentang Aplikasi</h3>'+
+    '<table style="width:100%;font-size:11px;margin-top:4px">'+
+      '<tr><td style="color:#6B6B5F;width:110px;padding:2px 0">Aplikasi</td><td><b>'+esc(APP.nama)+'</b></td></tr>'+
+      '<tr><td style="color:#6B6B5F;padding:2px 0">Versi</td><td><b>'+esc(APP.versi)+'</b> <span style="color:#6B6B5F">(build '+esc(APP.build)+')</span></td></tr>'+
+      (APP.penyedia?'<tr><td style="color:#6B6B5F;padding:2px 0">Penyedia</td><td>'+esc(APP.penyedia)+'</td></tr>':'')+
+      (APP.kontak?'<tr><td style="color:#6B6B5F;padding:2px 0">Dukungan</td><td>'+esc(APP.kontak)+'</td></tr>':'')+
+      '<tr><td style="color:#6B6B5F;padding:2px 0">Status</td><td>'+(S.lic?esc(S.lic.status):"\u2014")+'</td></tr>'+
+    '</table>'+
+    '<div class="row" style="gap:6px;margin-top:10px">'+
+      '<button class="btn btn-s" style="flex:1;font-size:11px" onclick="bukaLegal(\'sk\')">\ud83d\udcc4 Syarat & Ketentuan</button>'+
+      '<button class="btn btn-s" style="flex:1;font-size:11px" onclick="bukaLegal(\'privasi\')">\ud83d\udd12 Kebijakan Privasi</button>'+
+    '</div>'+
+    '<div class="sep"><label class="lbl">Perangkat Lunak Sumber Terbuka</label>'+lib+
+      '<div style="font-size:10px;color:#6B6B5F;margin-top:4px">Peta: \u00a9 OpenStreetMap contributors (ODbL) \u00b7 OpenTopoMap (CC-BY-SA)</div>'+
+    '</div>'+
+  '</div>';
+}
+
+function bukaLegal(jenis){
+  var sh=$("#rptSheet"); if(!sh)return;
+  sh.innerHTML='<div style="max-width:760px;margin:0 auto;font-size:12px;line-height:1.65;color:#222">'+
+    (jenis==="sk"?teksSK():teksPrivasi())+'</div>';
+  $("#rptTitle").textContent=(jenis==="sk"?"Syarat & Ketentuan":"Kebijakan Privasi")+" \u00b7 v"+APP.versi;
+  $("#rptPrint").onclick=function(){cetakLegal(jenis);};
+  var m=$("#rptModal"); if(m)m.style.display="flex";
+}
+function cetakLegal(jenis){
+  var isi=(jenis==="sk"?teksSK():teksPrivasi());
+  var w=window.open("","_blank"); if(!w){toast("Popup diblokir.","err");return;}
+  w.document.write('<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"/><title>'+
+    (jenis==="sk"?"Syarat & Ketentuan":"Kebijakan Privasi")+' \u2014 '+esc(APP.nama)+'</title>'+
+    '<style>@page{size:A4 portrait;margin:18mm}body{font-family:Inter,Arial,sans-serif;font-size:11px;line-height:1.6;color:#111}'+
+    'h2{font-size:15px;color:#1b4d3e;margin:0 0 4px}h3{font-size:12px;color:#1b4d3e;margin:14px 0 4px}'+
+    'ul{margin:4px 0 4px 18px;padding:0}li{margin:2px 0}table{border-collapse:collapse;width:100%;margin:6px 0}'+
+    'td,th{border:1px solid #999;padding:4px 6px;font-size:10px;text-align:left}th{background:#e8efe9}</style>'+
+    '</head><body>'+isi+'<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>');
+  w.document.close();
+}
+
+function _legalKepala(judul){
+  return '<h2>'+judul+'</h2>'+
+    '<div style="font-size:10px;color:#666;border-bottom:2px solid #1b4d3e;padding-bottom:6px;margin-bottom:10px">'+
+      esc(APP.nama)+' versi '+esc(APP.versi)+' \u00b7 berlaku sejak '+esc(APP.build)+
+      (APP.penyedia?' \u00b7 '+esc(APP.penyedia):'')+'</div>';
+}
+
+function teksSK(){
+  return _legalKepala("SYARAT & KETENTUAN PENGGUNAAN")+
+  '<h3>1. Penerimaan</h3><p>Dengan menggunakan aplikasi ini, Anda menyatakan telah membaca, memahami, dan menyetujui seluruh ketentuan berikut. Bila tidak menyetujui, mohon hentikan penggunaan aplikasi.</p>'+
+  '<h3>2. Lisensi Penggunaan</h3><ul>'+
+    '<li>Aplikasi diberikan sebagai lisensi pakai yang tidak eksklusif dan tidak dapat dialihkan.</li>'+
+    '<li>Lisensi terikat pada <b>satu Database ID</b>. Pemakaian pada database lain memerlukan lisensi terpisah.</li>'+
+    '<li>Masa uji coba berlaku 14 hari sejak database pertama kali digunakan.</li>'+
+    '<li>Setelah masa berlaku berakhir, aplikasi beralih ke <b>mode baca-saja</b>: data lama tetap dapat dilihat dan dicetak, namun penyimpanan data baru dinonaktifkan.</li>'+
+    '<li>Satu akun pengguna hanya dapat digunakan pada satu perangkat. Pemindahan perangkat dilakukan oleh admin.</li>'+
+  '</ul>'+
+  '<h3>3. Larangan</h3><ul>'+
+    '<li>Menyalin, memodifikasi, atau membuat karya turunan dari aplikasi.</li>'+
+    '<li>Melakukan rekayasa balik atau upaya melewati mekanisme lisensi.</li>'+
+    '<li>Menjual kembali, menyewakan, atau mensublisensikan aplikasi kepada pihak ketiga.</li>'+
+    '<li>Menghapus atau mengaburkan pemberitahuan hak cipta dan atribusi sumber peta.</li>'+
+    '<li>Menggunakan aplikasi untuk kegiatan yang melanggar hukum yang berlaku di Indonesia.</li>'+
+  '</ul>'+
+  '<h3>4. Kepemilikan</h3><p>Kode program, rancangan antarmuka, dan dokumentasi merupakan milik penyedia. <b>Seluruh data survei, foto, dan isi database adalah milik penuh pengguna.</b> Penyedia tidak mengklaim hak apa pun atas data tersebut.</p>'+
+  '<h3>5. Tanggung Jawab Pengguna</h3><ul>'+
+    '<li>Menjaga kerahasiaan kata sandi, kunci lisensi, dan akses akun Google.</li>'+
+    '<li>Memastikan keakuratan data yang dimasukkan.</li>'+
+    '<li>Melakukan pencadangan data secara berkala.</li>'+
+    '<li>Memastikan hak pakai atas sumber peta pihak ketiga yang dikonfigurasi sendiri.</li>'+
+  '</ul>'+
+  '<h3>6. Sifat Alat Bantu</h3><p>Aplikasi ini adalah <b>alat bantu pencatatan, pemetaan, dan analisis</b>. Hasil klasifikasi tanah, rekomendasi agronomi, dan analisis berbantuan AI bersifat indikatif. <b>Seluruh keputusan teknis pertanahan, agronomi, dan investasi tetap menjadi tanggung jawab pengguna serta tenaga ahli bersertifikat yang ditunjuk.</b> Analisis AI dapat menghasilkan kekeliruan dan wajib diverifikasi oleh ahli.</p>'+
+  '<h3>7. Ketersediaan Layanan</h3><p>Aplikasi bergantung pada layanan pihak ketiga (Google Workspace, penyedia peta, jaringan internet). Penyedia tidak menjamin operasi tanpa gangguan dan tidak bertanggung jawab atas gangguan yang berasal dari layanan tersebut.</p>'+
+  '<h3>8. Batasan Tanggung Jawab</h3><p>Aplikasi disediakan "sebagaimana adanya". Tanggung jawab penyedia dibatasi setinggi-tingginya sebesar biaya lisensi yang telah dibayarkan dalam 12 bulan terakhir. Penyedia tidak bertanggung jawab atas kehilangan data akibat kelalaian pengguna, kerusakan perangkat, atau penghapusan data peramban sebelum sinkronisasi selesai.</p>'+
+  '<h3>9. Pengakhiran</h3><p>Lisensi berakhir apabila masa berlaku habis atau terjadi pelanggaran ketentuan. Setelah pengakhiran, data pengguna tetap tersimpan di Google Sheets milik pengguna dan dapat diakses langsung.</p>'+
+  '<h3>10. Perubahan Ketentuan</h3><p>Penyedia dapat memperbarui ketentuan ini seiring pembaruan aplikasi. Versi ketentuan mengikuti versi aplikasi yang tercantum di atas.</p>'+
+  '<h3>11. Hukum yang Berlaku</h3><p>Perjanjian ini tunduk pada hukum Republik Indonesia. Sengketa diselesaikan secara musyawarah terlebih dahulu.</p>'+
+  (APP.kontak?'<h3>12. Kontak</h3><p>Pertanyaan mengenai ketentuan ini dapat disampaikan melalui '+esc(APP.kontak)+'.</p>':'');
+}
+
+function teksPrivasi(){
+  return _legalKepala("KEBIJAKAN PRIVASI")+
+  '<p>Kebijakan ini menjelaskan bagaimana aplikasi memperlakukan data Anda, sejalan dengan <b>Undang-Undang No. 27 Tahun 2022 tentang Pelindungan Data Pribadi</b>.</p>'+
+  '<h3>1. Prinsip Utama: Data Milik Anda</h3><p><b>Seluruh data disimpan di akun Google milik Anda sendiri</b> \u2014 Google Spreadsheet untuk data survei dan Google Drive untuk foto. Penyedia aplikasi <b>tidak memiliki server</b> dan <b>tidak menyimpan salinan</b> data Anda.</p>'+
+  '<h3>2. Data yang Diproses</h3>'+
+  '<table><tr><th>Jenis Data</th><th>Tujuan</th><th>Tempat Penyimpanan</th></tr>'+
+    '<tr><td>Nama, jabatan, nomor WhatsApp, foto profil</td><td>Identitas pengguna &amp; laporan</td><td>Spreadsheet Anda</td></tr>'+
+    '<tr><td>Username &amp; kata sandi</td><td>Autentikasi</td><td>Spreadsheet Anda (kata sandi disimpan sebagai hash bersalt, bukan teks asli)</td></tr>'+
+    '<tr><td>Koordinat GPS titik bor &amp; profil</td><td>Pemetaan lokasi survei</td><td>Spreadsheet Anda</td></tr>'+
+    '<tr><td>Posisi GPS langsung (bila diaktifkan)</td><td>Kolaborasi tim di peta</td><td>Spreadsheet Anda, dihapus otomatis setelah tidak aktif</td></tr>'+
+    '<tr><td>Foto lapangan</td><td>Dokumentasi survei</td><td>Google Drive Anda</td></tr>'+
+    '<tr><td>Tanda tangan digital</td><td>Pengesahan laporan</td><td>Spreadsheet Anda</td></tr>'+
+    '<tr><td>Pesan obrolan tim</td><td>Koordinasi lapangan</td><td>Spreadsheet Anda</td></tr>'+
+    '<tr><td>Pengenal perangkat</td><td>Pembatasan satu akun satu perangkat</td><td>Spreadsheet Anda &amp; peramban</td></tr>'+
+    '<tr><td>Data tertunda (mode luring)</td><td>Menyimpan data saat tanpa sinyal</td><td>Penyimpanan peramban perangkat Anda</td></tr>'+
+  '</table>'+
+  '<h3>3. Lokasi (GPS)</h3><p>Aplikasi meminta izin lokasi untuk mencatat koordinat titik survei dan, bila Anda mengaktifkannya, membagikan posisi kepada rekan satu tim. <b>Berbagi posisi bersifat pilihan</b> dan dapat dihentikan kapan saja melalui menu kolaborasi atau dengan keluar dari aplikasi. Posisi lama terhapus otomatis.</p>'+
+  '<h3>4. Pengungkapan Penting: Analisis AI</h3><p>Bila fitur analisis AI digunakan, <b>ringkasan data survei dikirim ke layanan Google Gemini</b> untuk diproses, dan tunduk pada kebijakan privasi Google. Data yang dikirim berupa ringkasan agregat (jenis tanah, fisiografi, drainase, kedalaman) \u2014 <b>tanpa foto, tanpa data pribadi pengguna</b>. Bila Anda tidak menghendaki hal ini, cukup jangan menggunakan fitur analisis AI; seluruh fungsi lain tetap berjalan normal.</p>'+
+  '<h3>5. Layanan Peta Pihak Ketiga</h3><p>Saat peta ditampilkan, alamat IP perangkat Anda terlihat oleh penyedia ubin peta (OpenStreetMap, OpenTopoMap, atau penyedia yang Anda konfigurasi sendiri). Koordinat area yang Anda lihat juga tersirat dari permintaan ubin. Ini melekat pada cara kerja peta daring dan berlaku pada semua aplikasi peta.</p>'+
+  '<h3>6. Yang TIDAK Dilakukan Aplikasi</h3><ul>'+
+    '<li>Tidak mengirim data Anda ke server penyedia aplikasi.</li>'+
+    '<li>Tidak menampilkan iklan dan tidak menjual data kepada pihak mana pun.</li>'+
+    '<li>Tidak memakai pelacak analitik pihak ketiga.</li>'+
+    '<li>Tidak mengakses kontak, pesan, atau berkas lain di perangkat Anda.</li>'+
+    '<li>Tidak merekam lokasi di latar belakang saat aplikasi tertutup.</li>'+
+  '</ul>'+
+  '<h3>7. Keamanan</h3><ul>'+
+    '<li>Kata sandi disimpan sebagai hash bersalt dengan peregangan berulang, bukan teks asli.</li>'+
+    '<li>Seluruh komunikasi memakai HTTPS.</li>'+
+    '<li>Akses dibatasi berdasarkan peran (viewer, editor, admin).</li>'+
+    '<li>Keamanan menyeluruh juga bergantung pada pengamanan akun Google Anda \u2014 disarankan mengaktifkan verifikasi dua langkah.</li>'+
+  '</ul>'+
+  '<h3>8. Hak Anda</h3><p>Sesuai UU PDP, Anda berhak mengakses, memperbaiki, menghapus, dan memperoleh salinan data pribadi Anda. Karena data berada di Google Sheets milik Anda sendiri, hak-hak tersebut dapat dijalankan langsung: buka spreadsheet, ubah atau hapus baris yang bersangkutan. Untuk data pengguna lain dalam organisasi Anda, hubungi admin database Anda.</p>'+
+  '<h3>9. Penyimpanan Data</h3><p>Data tersimpan selama Anda menyimpannya di akun Google Anda. Penyedia tidak dapat menghapus maupun memulihkan data Anda. Data tertunda di peramban akan hilang bila Anda membersihkan data situs sebelum sinkronisasi selesai.</p>'+
+  '<h3>10. Anak di Bawah Umur</h3><p>Aplikasi ini ditujukan untuk penggunaan profesional dan tidak dimaksudkan bagi anak di bawah 18 tahun.</p>'+
+  '<h3>11. Perubahan Kebijakan</h3><p>Kebijakan ini dapat diperbarui seiring pembaruan aplikasi. Versi kebijakan mengikuti versi aplikasi yang tercantum di atas.</p>'+
+  (APP.kontak?'<h3>12. Kontak</h3><p>Pertanyaan mengenai perlindungan data dapat disampaikan melalui '+esc(APP.kontak)+'.</p>':
+   '<h3>12. Kontak</h3><p>Pertanyaan mengenai perlindungan data dapat disampaikan kepada penyedia aplikasi Anda.</p>');
+}
+
 function viewSync(){
   var connected=!!S.ss;
   var isAdm=isAdmin();
@@ -871,7 +1007,7 @@ function viewSync(){
       '<button class="btn btn-p btn-full" style="margin-top:10px" onclick="saveUser()">👤 Simpan Pengguna</button>'+
       (ulist?'<div class="sep">'+ulist+'</div>':'<div class="hint" style="margin-top:8px">Belum ada daftar pengguna dimuat.</div>')+
       '<div class="sep" style="text-align:center"><a href="#" onclick="showLog();return false" style="font-size:11px;font-weight:700">📋 Tampilkan Log Aktivitas</a><div id="logOut"></div></div>'+
-    '</div>';
+    '</div>'+aboutCardHTML();
   }
   return licenseCardHTML()+userMgmt+
   '<div class="card">'+
@@ -894,7 +1030,6 @@ function viewSync(){
   (connected?qfieldSection():'')+
   (S.session?('<div class="card"><h3>👤 Sesi</h3><div style="font-size:12px">'+esc(S.session.name||"-")+(S.session.email?' · '+esc(S.session.email):'')+'</div><div style="font-size:11px;color:#6B6B5F;margin-top:2px">Peran: <b>'+String(S.session.role||"-").toUpperCase()+'</b></div></div>'):'');
 }
-
 function qfieldSection(){
   return '<div class="card"><div class="row" style="justify-content:space-between"><h3>⬆️ QField Offline Sync (Impor Data GIS)</h3></div>'+
     '<div class="sub">Impor titik bor dari GeoJSON hasil QField. Horizon digabung otomatis via bor_id.</div>'+
@@ -2230,6 +2365,11 @@ function viewLogin(msg,mode){
         '<div style="font-size:10px;color:#8f8f80;margin-top:3px">Pastikan ID ini <b>sama</b> dengan yang dipakai di perangkat lain. Bila berbeda, akun Anda tidak akan ditemukan.</div>'+
       '</div>':'')+
       '<div style="text-align:center;font-size:10px;color:#8f8f80;margin-top:16px">Login offline tersedia setelah pernah masuk online.</div>'+
+      '<div style="text-align:center;font-size:10px;color:#8f8f80;margin-top:10px;padding-top:10px;border-top:1px solid var(--garis)">'+
+        esc(APP.nama)+' v'+esc(APP.versi)+'<br/>'+
+        '<a href="#" onclick="bukaLegal(\'sk\');return false" style="color:#6B6B5F">Syarat &amp; Ketentuan</a> \u00b7 '+
+        '<a href="#" onclick="bukaLegal(\'privasi\');return false" style="color:#6B6B5F">Kebijakan Privasi</a>'+
+      '</div>'+
     '</div>'+
   '</div>';
 }
