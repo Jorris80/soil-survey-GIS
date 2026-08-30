@@ -130,7 +130,7 @@ var OPSI = {"fisiografi": ["Aluvial (< 10m)", "Teras (< 10 m)", "Plain (0 - 50 m
 /* ===== IDENTITAS & VERSI APLIKASI ===== */
 var APP = {
   nama: "Soil Survey GIS",
-  versi: "1.4.0",
+  versi: "1.5.0",
   build: "2026-08-28",
   penyedia: "",            // diisi penyedia: nama badan usaha
   kontak: "",              // diisi penyedia: email / WhatsApp dukungan
@@ -377,7 +377,10 @@ function render(){
   if(S.tab==="form")setTimeout(bindStepScroll,10);
 }
 function navBtn(t,ic,lbl){return '<button class="'+(S.tab===t?"on":"")+'" onclick="go(\''+t+'\')"><span class="ic">'+ic+'</span>'+lbl+'</button>';}
-function go(t){S.tab=t;render();}
+function go(t){
+  if(S.tab&&S.tab!==t){ S._tabHist=S._tabHist||[]; S._tabHist.push(S.tab); if(S._tabHist.length>20)S._tabHist.shift(); }
+  S.tab=t;render();
+}
 /* viewFor didefinisikan di bagian statistik (js9) agar mencakup tab Statistik */
 
 /* ===== TAB: FORM TITIK BOR ===== */
@@ -1685,7 +1688,7 @@ function boot(){
   try{ loadLocal(); loadPLocal(); loadSession(); }catch(e){}
   // Sudah ada sesi tersimpan? Langsung masuk (tanpa wajib server → bisa OFFLINE).
   try{
-    if(S.session&&S.session.username&&S.ss){ S._gate=false; S.tab="form"; loadCustomBase(); boot2(); jadwalCekLisensi();
+    if(S.session&&S.session.username&&S.ss){ S._gate=false; S.tab="form"; loadCustomBase(); boot2(); jadwalCekLisensi(); pasangTombolKembali();
       if(navigator.onLine){
         try{ call("setAuthHint",S.ss,{username:S.session.username,email:S.session.email}).catch(function(){}); }catch(e){}
         validasiSesi(); syncPending(); refreshLicense();
@@ -2499,7 +2502,87 @@ function jadwalCekLisensi(){
   });
   S._licLast=Date.now();
 }
-function enterApp(){S._gate=false;S.tab="form";saveSession();loadCustomBase();boot2();syncPending();refreshLicense();jadwalCekLisensi();}
+
+/* ============================================================================
+   TOMBOL KEMBALI (Android / peramban)
+   Menutup lapisan yang sedang terbuka satu per satu, bukan langsung keluar.
+   Urutan: modal laporan → lightbox → panel kolaborasi → layar penuh peta →
+   panel layer → langkah formulir → tab sebelumnya → konfirmasi keluar.
+   ========================================================================== */
+function _tampak(el){ return el && el.offsetParent !== null; }
+
+function tanganiKembali(){
+  // 1. Modal laporan / S&K / privasi
+  var rm=$("#rptModal");
+  if(rm && rm.style.display==="flex"){ rptClose(); return true; }
+
+  // 2. Lightbox foto
+  var lb=$("#lb");
+  if(lb && lb.classList.contains("on")){ lbClose(); return true; }
+
+  // 3. Panel Profil & Kolaborasi
+  var jm=document.getElementById("jx-modal");
+  if(jm && jm.style.display==="flex"){ jm.style.display="none"; return true; }
+
+  // 4. Peta layar penuh
+  if(S._full){ try{ toggleFull(); }catch(e){} return true; }
+
+  // 5. Panel layer peta
+  var gp=$("#gisPanel");
+  if(gp && gp.style.display==="block"){ gp.style.display="none"; return true; }
+
+  // 6. Mode identify aktif
+  if(S._identify){ try{ toggleIdentify(); }catch(e){} return true; }
+
+  // 7. Sedang membuka database di tab Profil
+  if(S.tab==="profil" && S.pForm && S.pForm._openDb){ S.pForm._openDb=false; render(); return true; }
+
+  // 8. Langkah formulir titik bor (mundur satu langkah)
+  if(S.tab==="form" && S.step>1){ stepTo(S.step-1); return true; }
+
+  // 9. Sedang mengedit → batalkan ke daftar
+  if(S.tab==="form" && S.editingId){
+    if(confirm("Batalkan penyuntingan? Perubahan yang belum disimpan akan hilang.")){
+      S.editingId=null;S.form=emptyForm();S.horizons=[];S.hzDraft=emptyHz();S.step=1;go("db");
+    }
+    return true;
+  }
+
+  // 10. Kembali ke tab sebelumnya
+  if(S._tabHist && S._tabHist.length){
+    var t=S._tabHist.pop(); S.tab=t; render(); return true;
+  }
+
+  // 11. Belum di tab utama → ke tab utama
+  if(S.tab!=="form"){ S.tab="form"; render(); return true; }
+
+  return false; // tidak ada lagi yang bisa ditutup
+}
+
+function pasangTombolKembali(){
+  if(S._backInit)return; S._backInit=true;
+  try{ history.replaceState({ssgis:1},""); history.pushState({ssgis:1},""); }catch(e){ return; }
+  window.addEventListener("popstate", function(){
+    var tertangani=false;
+    try{ tertangani=tanganiKembali(); }catch(e){ tertangani=false; }
+    if(tertangani){
+      // tetap di aplikasi
+      try{ history.pushState({ssgis:1},""); }catch(e){}
+      S._exitArm=0;
+      return;
+    }
+    // Konfirmasi keluar: tekan dua kali
+    if(S._exitArm && (Date.now()-S._exitArm)<2500){
+      // biarkan riwayat habis → peramban/PWA menutup aplikasi
+      return;
+    }
+    S._exitArm=Date.now();
+    toast("Tekan kembali sekali lagi untuk keluar.","info");
+    try{ history.pushState({ssgis:1},""); }catch(e){}
+  });
+}
+
+function enterApp(){S._gate=false;S.tab="form";saveSession();loadCustomBase();boot2();syncPending();refreshLicense();jadwalCekLisensi();pasangTombolKembali();}
 try{window.saveSession=saveSession;window.S=S;}catch(e){}
 
 </script>
