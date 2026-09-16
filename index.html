@@ -121,7 +121,7 @@
 "use strict";
 /* ===== KONFIGURASI ===== */
 // Untuk mode PWA/GitHub Pages: isi URL Web App (…/exec). Di Apps Script biarkan kosong.
-window.__API_URL__ = window.__API_URL__ || "";
+window.__API_URL__ = window.__API_URL__ || "https://script.google.com/macros/s/AKfycbyVFITOHYbGOFybmOzJzr34bPtTD7q52zJ4PcRRg61smmBklOeEhgPDkD0OHd5qGtr5Ig/exec";
 
 /* ===== DATA PILIHAN (dari CSV) ===== */
 var OPSI = {"fisiografi": ["Aluvial (< 10m)", "Teras (< 10 m)", "Plain (0 - 50 m)", "Hilly (50 - 300 m)", "Mountain (> 300 m)"], "topografi": ["Flat (0 - 3 %)", "Undulating (4 - 8 %)", "Rolling (9 - 15 %)", "Moderately Steep (16 - 25 %)", "Steep (26 - 40 %)", "Very Steep (> 40 %)"], "drainase": ["Excessively (ED)", "Somewhat Excessively (SE)", "Well (WD)", "Moderately Well (MD)", "Somewhat Poorly (SP)", "Poorly (PD)", "Very Poorly (VP)", "Subaqueous (SA)", "Ponded (P)", "Flooded (F)", "Non Observed (N)", "Ocean (O)"], "hue": ["5R", "7.5R", "10R", "2.5YR", "5YR", "7.5YR", "10YR", "2.5Y", "5Y", "10Y", "5GY", "GLEY 1", "GLEY 2"], "value": ["2,5", "3", "4", "5", "6", "7", "8"], "chroma": ["1", "2", "3", "4", "6", "8"], "tekstur": ["Coarse sand", "Sand", "Fine sand", "Very fine sand", "Loamy sand", "Sandy loam", "Silt", "Silt loam", "Loam", "Sandy clay loam", "Silty clay loam", "Clay loam", "Sandy clay", "Silty clay", "Clay", "Saprik", "Hemik", "Fibrik"], "konsistensi": ["Extremely Firm", "Very Firm", "Firm - Very Firm", "Firm", "Slightly Firm - Firm", "Slightly Firm", "Friable - Slightly Firm", "Friable", "Very Friable", "Loose", "Nonsticky", "Slightly Sticky", "Moderately Sticky", "Sticky", "Very Sticky"]};
@@ -130,7 +130,7 @@ var OPSI = {"fisiografi": ["Aluvial (< 10m)", "Teras (< 10 m)", "Plain (0 - 50 m
 /* ===== IDENTITAS & VERSI APLIKASI ===== */
 var APP = {
   nama: "Soil Survey GIS",
-  versi: "1.5.0",
+  versi: "1.7.0",
   build: "2026-08-28",
   penyedia: "",            // diisi penyedia: nama badan usaha
   kontak: "",              // diisi penyedia: email / WhatsApp dukungan
@@ -218,7 +218,7 @@ function call(fn){
         .withFailureHandler(function(e){rej(new Error(e&&e.message?e.message:String(e)));})[fn].apply(null,ja);
     } else if(api){
       if(!navigator.onLine){rej(new Error("__OFFLINE__"));return;}
-      fetch(api,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({fn:fn,args:args,auth:{username:(S.session&&S.session.username)||"",email:(S.session&&S.session.email)||""}})})
+      fetch(api,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({fn:fn,args:args,sessionToken:(S.session&&S.session.sessionToken)||"",auth:{username:(S.session&&S.session.username)||"",email:(S.session&&S.session.email)||""}})})
         .then(function(r){return r.text();}).then(function(t){
           var env=JSON.parse(t); if(!env.ok)throw new Error(env.error||"Gagal");
           var d=env.data; res(typeof d==="string"&&d?JSON.parse(d):d);
@@ -1070,7 +1070,7 @@ function loadRecords(){
   if(!S.ss){toast("Hubungkan spreadsheet dulu.","err");return;}
   toast("Memuat data…","info");
   call("fetchSurveysFromSheet",S.ss).then(function(list){
-    S.records=(list||[]).map(function(r){
+    var dariServer=(list||[]).map(function(r){
       (r.horizons||[]).forEach(function(h){
         function sp(str,pfx){var m=String(str||"").match(/^(\S+)\s+(\S+?)\/(\S+)/);if(m){h[pfx+"_Hue"]=h[pfx+"_Hue"]||m[1];h[pfx+"_Value"]=h[pfx+"_Value"]||m[2];h[pfx+"_Chroma"]=h[pfx+"_Chroma"]||m[3];}}
         if(!h.warnaMatrik_Hue)sp(h.warnaMatrik,"warnaMatrik");
@@ -1080,9 +1080,52 @@ function loadRecords(){
       r.fotos=parseFotos(r);
       return r;
     });
-    saveLocal();toast("✅ "+S.records.length+" record dimuat.","ok");render();
+    S.records=gabungRecords(S.records||[],dariServer);
+    saveLocal();
+    var tertunda=S.records.filter(function(r){return r.syncStatus!=="synced";}).length;
+    toast("✅ "+S.records.length+" record dimuat"+(tertunda?" ("+tertunda+" menunggu sinkron)":"")+".","ok");
+    render();
+    if(tertunda&&navigator.onLine)syncPending();
   }).catch(function(e){toast("Gagal muat: "+e.message,"err");});
 }
+
+/* Gabungkan data server dengan data lokal.
+   ATURAN KESELAMATAN DATA:
+   1. Data lokal yang BELUM tersinkron tidak boleh hilang, walau tak ada di server.
+   2. Foto base64 yang belum terunggah dipertahankan bila salinan server kosong.
+   3. Data server menang hanya untuk record yang memang sudah tersinkron. */
+function gabungRecords(lokal,server){
+  var hasil=[], indeks={};
+  server.forEach(function(r){
+    var kunci=String(r.id||r.borId||"").toLowerCase();
+    if(kunci)indeks[kunci]=r;
+    hasil.push(r);
+  });
+  lokal.forEach(function(l){
+    var kunci=String(l.id||l.borId||"").toLowerCase();
+    var srv=kunci?indeks[kunci]:null;
+    if(!srv){
+      // Tidak ada di server. Bila belum tersinkron → PERTAHANKAN (jangan dihapus).
+      if(l.syncStatus!=="synced")hasil.push(l);
+      return;
+    }
+    // Ada di server: pertahankan foto lokal yang belum terunggah.
+    var fotoLokal=(l.fotos||[]).filter(function(d){return /^data:/.test(d);});
+    if(fotoLokal.length){
+      var fotoSrv=(srv.fotos||[]).filter(function(d){return /^https?:\/\//.test(d);});
+      srv.fotos=fotoSrv.concat(fotoLokal);
+      srv._pendingPhotos=true;
+      srv.syncStatus="pending";     // agar dicoba unggah lagi
+    }
+    if(l.syncStatus!=="synced"&&!fotoLokal.length){
+      // Ada perubahan lokal yang belum terkirim → jangan ditimpa server.
+      var idx=hasil.indexOf(srv);
+      if(idx>=0)hasil[idx]=l;
+    }
+  });
+  return hasil;
+}
+
 function saveLocal(){try{localStorage.setItem("ss_records",JSON.stringify(S.records));localStorage.setItem("ss_ss",S.ss);}catch(e){}}
 function loadLocal(){try{S.records=JSON.parse(localStorage.getItem("ss_records")||"[]");S.ss=localStorage.getItem("ss_ss")||"";}catch(e){}}
 </script>
@@ -1690,15 +1733,28 @@ function boot(){
   try{
     if(S.session&&S.session.username&&S.ss){ S._gate=false; S.tab="form"; loadCustomBase(); boot2(); jadwalCekLisensi(); pasangTombolKembali();
       if(navigator.onLine){
-        try{ call("setAuthHint",S.ss,{username:S.session.username,email:S.session.email}).catch(function(){}); }catch(e){}
-        validasiSesi(); syncPending(); refreshLicense();
+        try{ call("setAuthHint",S.ss,{username:S.session.username,email:S.session.email,sessionToken:S.session.sessionToken}).catch(function(){}); }catch(e){}
+        validasiSesi(); refreshLicense();   // sinkron ditangani boot2 (berurutan)
       } return; }
     showLogin();
   }catch(e){ $("#app").innerHTML='<div style="padding:40px;text-align:center;color:#900">Gagal memuat UI: '+(e&&e.message||e)+'</div>'; }
 }
 function boot2(){
   render();
-  if(S.ss&&navigator.onLine){loadRecords();loadProfils();if(S.session&&S.session.role==="admin")loadUsers();}
+  if(S.ss&&navigator.onLine){
+    // URUTAN PENTING: kirim dulu data tertunda, BARU muat dari server.
+    // Bila dibalik, data lokal yang belum terkirim (termasuk foto base64)
+    // berisiko tertimpa hasil dari server.
+    var awal=(S.records||[]).some(function(r){return r.syncStatus!=="synced";})
+      ? Promise.resolve(syncPending()).catch(function(){})
+      : Promise.resolve();
+    awal.then(function(){
+      setTimeout(function(){
+        loadRecords();loadProfils();
+        if(S.session&&S.session.role==="admin")loadUsers();
+      }, 300);
+    });
+  }
 }
 window.addEventListener("online",function(){S.online=true;render();});
 window.addEventListener("offline",function(){S.online=false;render();});
@@ -2280,33 +2336,91 @@ function pendingCount(){return (S.records||[]).filter(function(r){return r.syncS
 function syncPending(){
   if(bacaSaja())return;
   if(!navigator.onLine||!S.ss)return;
+  if(S._syncing)return;                       // cegah sinkron ganda (online+timer bersamaan)
   var pend=(S.records||[]).filter(function(r){return r.syncStatus!=="synced";});
   if(!pend.length){return;}
+  S._syncing=true;
   toast("Menyinkron "+pend.length+" data lokal…","info");
-  var done=0,fail=0;
+  var done=0,fail=0,fotoTertunda=0;
   var chain=Promise.resolve();
+
   pend.forEach(function(rec){
     chain=chain.then(function(){
-      // upload foto base64 dulu bila ada
       var fotos=(rec.fotos||[]).slice();
-      var needUp=fotos.some(function(d){return /^data:/.test(d);});
-      var up=needUp?call("savePhotos",S.ss,fotos).then(function(r){return (r&&r.urls)||fotos;}).catch(function(){return fotos;}):Promise.resolve(fotos);
-      return up.then(function(urls){
-        rec.fotos=urls;rec.foto=JSON.stringify(urls);rec._pendingPhotos=false;
-        var op=rec.googleSheetRowIndex?call("updateSurveyInSheet",S.ss,rec,rec.googleSheetRowIndex):call("appendSurveyToSheet",S.ss,rec);
+      var perluUnggah=fotos.some(function(d){return /^data:/.test(d);});
+
+      var langkahFoto = perluUnggah
+        ? call("savePhotos",S.ss,fotos).then(function(r){
+            var urls=(r&&r.urls)||null;
+            // ATURAN KESELAMATAN DATA:
+            // hasil hanya dipakai bila berupa larik dengan panjang SAMA.
+            // Bila tidak, base64 asli DIPERTAHANKAN agar foto tidak hilang.
+            if(!Array.isArray(urls)||urls.length!==fotos.length){
+              return {hasil:fotos, semuaTerunggah:false};
+            }
+            var gabung=fotos.map(function(asli,i){
+              var u=urls[i];
+              // null / kosong = gagal unggah → pertahankan base64 aslinya
+              return (typeof u==="string"&&/^https?:\/\//.test(u))?u:asli;
+            });
+            var semua=gabung.every(function(x){return /^https?:\/\//.test(x);});
+            return {hasil:gabung, semuaTerunggah:semua};
+          }).catch(function(e){
+            if(isOffline(e))throw e;
+            return {hasil:fotos, semuaTerunggah:false};   // gagal → jangan sentuh foto
+          })
+        : Promise.resolve({hasil:fotos, semuaTerunggah:true});
+
+      return langkahFoto.then(function(fo){
+        var urls=fo.hasil;
+        var masihBase64=urls.some(function(d){return /^data:/.test(d);});
+
+        // Simpan SALINAN untuk dikirim; jangan rusak data lokal sebelum berhasil.
+        var kirim=Object.assign({},rec);
+        kirim.fotos=urls;
+        // Kolom sheet tak boleh memuat base64 (melebihi batas sel & memicu kegagalan).
+        kirim.foto=masihBase64?JSON.stringify(urls.filter(function(d){return /^https?:\/\//.test(d);})):JSON.stringify(urls);
+
+        var op=rec.googleSheetRowIndex
+          ? call("updateSurveyInSheet",S.ss,kirim,rec.googleSheetRowIndex)
+          : call("appendSurveyToSheet",S.ss,kirim);
+
         return op.then(function(res){
-          rec.syncStatus="synced";
+          // Baru setelah server menerima, data lokal diperbarui.
+          rec.fotos=urls;
+          rec.foto=kirim.foto;
           if(typeof res==="number"&&res>0)rec.googleSheetRowIndex=res;
-          done++;
+          if(masihBase64){
+            // Baris tersimpan, tetapi sebagian foto belum terunggah →
+            // biarkan tetap tertunda agar dicoba lagi nanti. Base64 tetap utuh.
+            rec._pendingPhotos=true;
+            rec.syncStatus="pending";
+            fotoTertunda++;
+          } else {
+            rec._pendingPhotos=false;
+            rec.syncStatus="synced";
+            done++;
+          }
+          saveLocal();                         // simpan progres per-data
         });
-      }).catch(function(e){ if(isOffline(e))throw e; fail++; });
+      }).catch(function(e){
+        if(isOffline(e))throw e;
+        fail++;
+        saveLocal();
+      });
     });
   });
+
   chain.then(function(){return call("resyncAllHorizons",S.ss).catch(function(){});}).then(function(){
+    S._syncing=false;
     saveLocal();
-    if(done)toast("✅ "+done+" data lokal tersinkron"+(fail?", "+fail+" gagal":"")+".","ok");
+    var pesan=[];
+    if(done)pesan.push("✅ "+done+" data tersinkron");
+    if(fotoTertunda)pesan.push("⏳ "+fotoTertunda+" data: foto belum terunggah (akan dicoba lagi, foto aman di perangkat)");
+    if(fail)pesan.push("⚠️ "+fail+" gagal");
+    if(pesan.length)toast(pesan.join(" · "),fail||fotoTertunda?"info":"ok");
     var m=$("#main");if(m&&(S.tab==="db"||S.tab==="sync"))m.innerHTML=viewFor(S.tab);
-  }).catch(function(){ /* masih offline, biarkan pending */ });
+  }).catch(function(){ S._syncing=false; saveLocal(); /* masih offline, biarkan tertunda */ });
 }
 
 /* Pantau status koneksi: auto-sync saat kembali online */
@@ -2433,7 +2547,7 @@ function doLogin(){
     sess._h=hashLite(p); // simpan verifier ringan utk login offline berikutnya
     sess._lastOk=Date.now();
     S.session=sess;saveSession();
-    try{ call("setAuthHint",S.ss,{username:sess.username,email:sess.email})
+    try{ call("setAuthHint",S.ss,{username:sess.username,email:sess.email,sessionToken:sess.sessionToken})
       .then(function(){ try{ if(window.jxRefreshMe)window.jxRefreshMe(); }catch(e2){} })
       .catch(function(){}); }catch(e){}
     enterApp();
@@ -2458,7 +2572,8 @@ function logout(){
   // hentikan berbagi posisi agar tidak tertinggal di peta rekan
   try{ if(S.ss&&navigator.onLine){
     call("stopSharing",S.ss,{deviceId:myDeviceId(),email:(S.session&&S.session.email)||""}).catch(function(){});
-    call("setAuthHint",S.ss,{username:"",email:""}).catch(function(){});
+    call("setAuthHint",S.ss,{username:"",email:"",sessionToken:""}).catch(function(){});
+    call("logoutSession",S.ss,(S.session&&S.session.sessionToken)||"").catch(function(){});
   } }catch(e){}
   clearSession();S.session=null;S._gate=true;S.lic=null;
   try{ if(window.jxRefreshMe)window.jxRefreshMe(); }catch(e){}
@@ -2469,12 +2584,15 @@ function logout(){
 function validasiSesi(){
   if(!S.ss||!S.session||!S.session.username||!navigator.onLine)return;
   if(S._valLoading)return; S._valLoading=true;
-  call("validasiAkun",S.ss,{username:S.session.username,email:S.session.email,deviceId:myDeviceId()})
+  call("validasiAkun",S.ss,{username:S.session.username,email:S.session.email,deviceId:myDeviceId(),sessionToken:S.session.sessionToken||""})
   .then(function(v){
     S._valLoading=false;
     if(!v)return;
     if(v.ok===false){
       var alasan=v.pesan||"Sesi tidak berlaku lagi.";
+      // Data tertunda TIDAK pernah dihapus saat sesi berakhir.
+      var tertunda=(S.records||[]).filter(function(r){return r.syncStatus!=="synced";}).length;
+      if(tertunda)alasan+=" ("+tertunda+" data menunggu sinkron tetap tersimpan di perangkat.)";
       try{ if(S._licTimer){clearInterval(S._licTimer);S._licTimer=null;} }catch(e){}
       clearSession();S.session=null;S._gate=true;S.lic=null;
       showLogin(alasan+" Silakan masuk kembali.","err");
@@ -2582,7 +2700,7 @@ function pasangTombolKembali(){
   });
 }
 
-function enterApp(){S._gate=false;S.tab="form";saveSession();loadCustomBase();boot2();syncPending();refreshLicense();jadwalCekLisensi();pasangTombolKembali();}
+function enterApp(){S._gate=false;S.tab="form";saveSession();loadCustomBase();boot2();refreshLicense();jadwalCekLisensi();pasangTombolKembali();}
 try{window.saveSession=saveSession;window.S=S;}catch(e){}
 
 </script>
