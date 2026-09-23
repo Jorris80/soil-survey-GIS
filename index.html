@@ -130,7 +130,7 @@ var OPSI = {"fisiografi": ["Aluvial (< 10m)", "Teras (< 10 m)", "Plain (0 - 50 m
 /* ===== IDENTITAS & VERSI APLIKASI ===== */
 var APP = {
   nama: "Soil Survey GIS",
-  versi: "1.8.1",
+  versi: "1.9.0",
   build: "2026-08-28",
   penyedia: "",            // diisi penyedia: nama badan usaha
   kontak: "",              // diisi penyedia: email / WhatsApp dukungan
@@ -157,7 +157,8 @@ function emptyForm(){return{
   kedalamanEfektif:"",kedalamanGambut:"",jenisGambut:"",kematanganGambut:"",substratumGambut:"",airTanah:"",drainase:"",horizonSementara:"",epipedon:"",bawahPermukaan:"",klasifikasi:"",
   altitude:0,jenisTanah:"",teksturTopsoil:"",teksturSubsoil:"",fotos:[],
   pH_H2O_Topsoil:"",pH_H2O_Subsoil:"",pH_H2O2_Topsoil:"",pH_H2O2_Subsoil:"",
-  ecTopsoil:"",ecSubsoil:"",tdsTopsoil:"",tdsSubsoil:"",notes:""
+  ecTopsoil:"",ecSubsoil:"",tdsTopsoil:"",tdsSubsoil:"",
+  pH_HCL_Topsoil:"",pH_HCL_Subsoil:"",salinitasTopsoil:"",salinitasSubsoil:"",notes:""
 };}
 function emptyHz(){return{
   depthFrom:0,depthTo:0,horizonName:"",horizonSuffix:"",
@@ -165,7 +166,7 @@ function emptyHz(){return{
   warnaKaratan_Hue:"",warnaKaratan_Value:"",warnaKaratan_Chroma:"",
   warnaCampuran_Hue:"",warnaCampuran_Value:"",warnaCampuran_Chroma:"",
   texture:"",consistency:"",gravelPercent:"",
-  pH_H2O:"",pH_H2O2:"",pH_HCL:"",ec:"",tds:"",keterangan:""
+  pH_H2O:"",pH_H2O2:"",pH_HCL:"",ec:"",tds:"",salinitas:"",keterangan:""
 };}
 
 
@@ -472,6 +473,15 @@ function viewForm(){
       inField("ecSubsoil","EC Subsoil",f.ecSubsoil,"number")+
       inField("tdsTopsoil","TDS Topsoil",f.tdsTopsoil,"number")+
       inField("tdsSubsoil","TDS Subsoil",f.tdsSubsoil,"number")+
+    '</div>'+
+    '<div style="margin-top:10px"><label class="lbl" style="font-size:10px;color:var(--redup)">Opsional — isi bila tersedia datanya</label>'+
+    '<div class="grid g2" style="margin-top:4px">'+
+      inField("pH_HCL_Topsoil","pH HCl Topsoil",f.pH_HCL_Topsoil,"number")+
+      inField("pH_HCL_Subsoil","pH HCl Subsoil",f.pH_HCL_Subsoil,"number")+
+      inField("salinitasTopsoil","Salinitas Topsoil (ppt)",f.salinitasTopsoil,"number")+
+      inField("salinitasSubsoil","Salinitas Subsoil (ppt)",f.salinitasSubsoil,"number")+
+    '</div>'+
+    '<div class="hint">Baris ini hanya muncul di laporan bila diisi.</div>'+
     '</div></div>'+
     '<div class="sep">'+inField("notes","Catatan",f.notes)+'</div>';
   } else if(st===4){ // Horizon (tabel relasi) + combo hue/value/chroma/tekstur/konsistensi
@@ -542,7 +552,9 @@ function hzSection(){
       inField("__hz_phcl","pH HCl",d.pH_HCL,"number")+
       inField("__hz_ec","EC",d.ec,"number")+
       inField("__hz_tds","TDS",d.tds,"number")+
+      inField("__hz_sal","Salinitas (ppt)",d.salinitas,"number")+
     '</div>'+
+    '<div class="hint">pH HCl & Salinitas opsional — kolomnya hanya muncul di laporan bila ada datanya.</div>'+
     inField("__hz_ket","Keterangan",d.keterangan)+
     (S._hzEdit!=null?
       '<div class="row" style="margin-top:10px"><button class="btn btn-p" style="flex:1" onclick="addHz()">💾 Update Horizon</button><button class="btn btn-s" onclick="cancelHz()">Batal</button></div>'
@@ -557,7 +569,7 @@ function setField(f,v){ // override untuk tangani draft horizon
       __hz_khue:"warnaKaratan_Hue",__hz_kval:"warnaKaratan_Value",__hz_kchr:"warnaKaratan_Chroma",
       __hz_chue:"warnaCampuran_Hue",__hz_cval:"warnaCampuran_Value",__hz_cchr:"warnaCampuran_Chroma",
       __hz_tex:"texture",__hz_con:"consistency",__hz_gravel:"gravelPercent",
-      __hz_ph:"pH_H2O",__hz_ph2:"pH_H2O2",__hz_phcl:"pH_HCL",__hz_ec:"ec",__hz_tds:"tds",__hz_ket:"keterangan"};
+      __hz_ph:"pH_H2O",__hz_ph2:"pH_H2O2",__hz_phcl:"pH_HCL",__hz_ec:"ec",__hz_tds:"tds",__hz_sal:"salinitas",__hz_ket:"keterangan"};
     var k=map[f]; if(k){ S.hzDraft[k]=(k==="depthFrom"||k==="depthTo")?num(v):v; }
     return;
   }
@@ -1200,7 +1212,17 @@ function borReportCSS(){return 'h1{text-align:center;font-size:15px;margin:0 0 2
 function borReportHTML(r,newPage){
   var hz=(r.horizons||[]).slice().sort(function(a,b){return a.depthFrom-b.depthFrom;});
   function mun(h,pfx){return h[pfx]||[h[pfx+"_Hue"],(h[pfx+"_Value"]||h[pfx+"_Chroma"])?((h[pfx+"_Value"]||"")+"/"+(h[pfx+"_Chroma"]||"")):""].filter(Boolean).join(" ");}
-  var hzRows=hz.map(function(h){return '<tr><td style="text-align:center">'+esc((h.horizonName||"")+(h.horizonSuffix||""))+'</td><td style="text-align:center;white-space:nowrap">'+fmtDepth(h.depthFrom,h.depthTo)+'</td><td>'+esc(mun(h,"warnaMatrik")||"-")+'</td><td>'+esc(mun(h,"warnaKaratan")||"-")+'</td><td>'+esc(mun(h,"warnaCampuran")||"-")+'</td><td>'+esc(h.texture||"-")+'</td><td>'+esc(h.consistency||"-")+'</td><td style="text-align:center">'+esc(h.gravelPercent||"-")+'</td><td style="text-align:center">'+esc(h.pH_H2O||"-")+'</td><td style="text-align:center">'+esc(h.pH_H2O2||"-")+'</td><td style="text-align:center">'+esc(h.pH_HCL||"-")+'</td><td style="text-align:center">'+esc(h.ec||"-")+'</td><td style="text-align:center">'+esc(h.tds||"-")+'</td><td>'+esc(h.keterangan||"")+'</td></tr>';}).join("");
+  /* Kolom OPSIONAL: hanya dicetak bila setidaknya satu horizon memiliki datanya,
+     sehingga laporan tidak dipenuhi kolom kosong. */
+  function barisOpsi(label,a,b){
+    var isi=function(v){return v!==undefined&&v!==null&&String(v).trim()!=="";};
+    if(!isi(a)&&!isi(b))return "";
+    return '<tr><td>'+esc(label)+'</td><td style="text-align:center">'+esc(isi(a)?a:"-")+'</td><td style="text-align:center">'+esc(isi(b)?b:"-")+'</td></tr>';
+  }
+  function adaIsi(kunci){return hz.some(function(h){var v=h[kunci];return v!==undefined&&v!==null&&String(v).trim()!=="";});}
+  var adaHcl=adaIsi("pH_HCL"), adaSal=adaIsi("salinitas");
+  var hzRows=hz.map(function(h){return '<tr><td style="text-align:center">'+esc((h.horizonName||"")+(h.horizonSuffix||""))+'</td><td style="text-align:center;white-space:nowrap">'+fmtDepth(h.depthFrom,h.depthTo)+'</td><td>'+esc(mun(h,"warnaMatrik")||"-")+'</td><td>'+esc(mun(h,"warnaKaratan")||"-")+'</td><td>'+esc(mun(h,"warnaCampuran")||"-")+'</td><td>'+esc(h.texture||"-")+'</td><td>'+esc(h.consistency||"-")+'</td><td style="text-align:center">'+esc(h.gravelPercent||"-")+'</td><td style="text-align:center">'+esc(h.pH_H2O||"-")+'</td><td style="text-align:center">'+esc(h.pH_H2O2||"-")+'</td>'+(adaHcl?'<td style="text-align:center">'+esc(h.pH_HCL||"-")+'</td>':'')+'<td style="text-align:center">'+esc(h.ec||"-")+'</td><td style="text-align:center">'+esc(h.tds||"-")+'</td>'+(adaSal?'<td style="text-align:center">'+esc(h.salinitas||"-")+'</td>':'')+'<td>'+esc(h.keterangan||"")+'</td></tr>';}).join("");
+  var kolHz=12+(adaHcl?1:0)+(adaSal?1:0);
   function baris(l,v){return '<tr><td class="k">'+l+'</td><td>:</td><td class="v">'+esc(v||"-")+'</td></tr>';}
   /* Baris gambut hanya dicetak bila titik bor memang dijumpai lapisan gambut. */
   function barisGambut(rec){
@@ -1253,9 +1275,12 @@ function borReportHTML(r,newPage){
       '<tr><td>pH H₂O₂</td><td style="text-align:center">'+esc(r.pH_H2O2_Topsoil||"-")+'</td><td style="text-align:center">'+esc(r.pH_H2O2_Subsoil||"-")+'</td></tr>'+
       '<tr><td>EC</td><td style="text-align:center">'+esc(r.ecTopsoil||"-")+'</td><td style="text-align:center">'+esc(r.ecSubsoil||"-")+'</td></tr>'+
       '<tr><td>TDS</td><td style="text-align:center">'+esc(r.tdsTopsoil||"-")+'</td><td style="text-align:center">'+esc(r.tdsSubsoil||"-")+'</td></tr>'+
+      /* Baris opsional: hanya tercetak bila salah satu sisi terisi. */
+      barisOpsi("pH HCl",r.pH_HCL_Topsoil,r.pH_HCL_Subsoil)+
+      barisOpsi("Salinitas (ppt)",r.salinitasTopsoil,r.salinitasSubsoil)+
     '</tbody></table>'+
     '<div class="sect">Deskripsi Horizon</div>'+
-    '<table class="hz"><thead><tr><th>Horizon</th><th>Kedalaman<br/>(cm)</th><th>Warna<br/>Matrik</th><th>Warna<br/>Karatan</th><th>Warna<br/>Campuran</th><th>Tekstur</th><th>Konsistensi</th><th>Gravel<br/>%</th><th>pH<br/>H₂O</th><th>pH<br/>H₂O₂</th><th>pH<br/>HCl</th><th>EC</th><th>TDS</th><th>Keterangan</th></tr></thead><tbody>'+(hzRows||'<tr><td colspan="14" style="text-align:center;color:#888">Belum ada horizon</td></tr>')+'</tbody></table>'+
+    '<table class="hz"><thead><tr><th>Horizon</th><th>Kedalaman<br/>(cm)</th><th>Warna<br/>Matrik</th><th>Warna<br/>Karatan</th><th>Warna<br/>Campuran</th><th>Tekstur</th><th>Konsistensi</th><th>Gravel<br/>%</th><th>pH<br/>H₂O</th><th>pH<br/>H₂O₂</th>'+(adaHcl?'<th>pH<br/>HCl</th>':'')+'<th>EC</th><th>TDS</th>'+(adaSal?'<th>Salinitas<br/>(ppt)</th>':'')+'<th>Keterangan</th></tr></thead><tbody>'+(hzRows||'<tr><td colspan="'+kolHz+'" style="text-align:center;color:#888">Belum ada horizon</td></tr>')+'</tbody></table>'+
     (r.notes?'<div style="margin-top:10px;font-size:10px"><b>Catatan:</b> '+esc(r.notes)+'</div>':"")+foto+
     '<div class="sign"><div class="box">Surveyor Tanah,<div class="sign-name">'+esc(r.surveyorName||"________________")+'</div><div class="sign-role">Surveyor Lapangan</div></div></div>';
 }
