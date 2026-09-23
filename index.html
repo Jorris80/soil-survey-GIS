@@ -130,7 +130,7 @@ var OPSI = {"fisiografi": ["Aluvial (< 10m)", "Teras (< 10 m)", "Plain (0 - 50 m
 /* ===== IDENTITAS & VERSI APLIKASI ===== */
 var APP = {
   nama: "Soil Survey GIS",
-  versi: "1.8.0",
+  versi: "1.8.1",
   build: "2026-08-28",
   penyedia: "",            // diisi penyedia: nama badan usaha
   kontak: "",              // diisi penyedia: email / WhatsApp dukungan
@@ -1186,8 +1186,14 @@ function loadLocal(){try{S.records=JSON.parse(localStorage.getItem("ss_records")
 /* ===== PDF LAPORAN TITIK BOR ===== */
 function borReportCSS(){return 'h1{text-align:center;font-size:15px;margin:0 0 2px;letter-spacing:.5px}'+
   '.sub{text-align:center;font-size:9px;color:#555;border-bottom:2px solid #1b4d3e;padding-bottom:6px;margin-bottom:12px}'+
-  'table.info{border-collapse:collapse;width:100%}table.info td{padding:1.5px 4px;font-size:11px;vertical-align:top}table.info td.k{width:170px;font-weight:600}'+
-  '.two{display:flex;gap:20px}.two>div{flex:1}.sect{font-weight:800;font-size:11px;text-transform:uppercase;border-left:3px solid #1b4d3e;padding-left:6px;margin:12px 0 5px}'+
+  /* table-layout tetap + lebar kolom sama pada kedua sisi → titik dua & nilai sejajar. */
+  'table.info{border-collapse:collapse;width:100%;table-layout:fixed}'+
+  'table.info td{padding:2px 4px;font-size:11px;vertical-align:top;line-height:1.45}'+
+  'table.info td.k{width:44%;font-weight:600}'+
+  'table.info td:nth-child(2){width:10px;text-align:center}'+
+  'table.info td.v{width:auto;word-wrap:break-word;overflow-wrap:anywhere}'+
+  '.two{display:flex;gap:24px;align-items:flex-start}.two>div{flex:1 1 0;min-width:0}'+
+  '.sect{font-weight:800;font-size:11px;text-transform:uppercase;border-left:3px solid #1b4d3e;padding-left:6px;margin:12px 0 5px}'+
   'table.hz{border-collapse:collapse;width:100%;margin-top:4px}table.hz th{border:1px solid #333;background:#e8efe9;font-size:8.5px;padding:4px 3px}table.hz td{border:1px solid #555;font-size:8.5px;padding:3px 3px}'+
   '.sign{margin-top:26px;display:flex;justify-content:flex-end;text-align:center}.sign .box{min-width:200px}.sign-name{margin-top:52px;font-weight:700;text-decoration:underline}.sign-role{font-size:9px;color:#555}'+
   '.pgbreak{page-break-before:always}';}
@@ -1211,8 +1217,35 @@ function borReportHTML(r,newPage){
   var foto=_fotos.length?('<div class="sect">Dokumentasi Foto</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;align-items:flex-start">'+_fotos.map(function(u){return '<img src="'+esca(u)+'" style="width:'+(_fotos.length>2?"31%":_fotos.length>1?"46%":"60%")+';max-height:340px;object-fit:contain;border:1px solid #999;border-radius:6px" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'"/>';}).join("")+'</div>'):"";
   return (newPage?'<div class="pgbreak"></div>':'')+
     '<h1>LAPORAN DESKRIPSI TITIK BOR</h1><div class="sub">DATABASE SOIL SURVEY & GIS · '+esc(r.perusahaan||"")+'</div>'+
-    '<div class="two"><div><table class="info">'+baris("Bor ID",r.borId)+baris("No. Bor",r.noBor)+baris("Perusahaan",r.perusahaan)+baris("Kebun/Estate",r.kebun)+baris("Rintis",r.rintis)+baris("Surveyor",r.surveyorName)+baris("Tanggal",r.surveyDate)+baris("Koordinat",(r.latitude&&r.longitude)?(r.latitude+", "+r.longitude):"-")+baris("Altitude",r.altitude?r.altitude+" m dpl":"-")+'</table></div>'+
-    '<div><table class="info">'+baris("Fisiografi",r.fisiografi)+baris("Topografi",r.topografi)+baris("Lereng Maks",r.lerengMaks)+baris("Bahan Induk",r.bahanInduk)+baris("Vegetasi",r.vegetasi)+baris("Kedalaman Efektif",r.kedalamanEfektif)+barisGambut(r)+baris("Air Tanah",r.airTanah)+baris("Drainase",r.drainase)+baris("Epipedon",r.epipedon)+baris("Bawah Permukaan",r.bawahPermukaan)+baris("Klasifikasi",r.klasifikasi)+baris("Jenis Tanah",r.jenisTanah)+'</table></div></div>'+
+    /* Identitas dibagi OTOMATIS ke dua kolom agar tinggi keduanya seimbang.
+       Tanpa ini, kolom kanan menjadi jauh lebih panjang saat baris gambut terisi. */
+    (function(){
+      var item=[
+        ["Bor ID",r.borId],["No. Bor",r.noBor],["Perusahaan",r.perusahaan],
+        ["Kebun/Estate",r.kebun],["Rintis",r.rintis],["Surveyor",r.surveyorName],
+        ["Tanggal",r.surveyDate],
+        ["Koordinat",(r.latitude&&r.longitude)?(r.latitude+", "+r.longitude):"-"],
+        ["Altitude",r.altitude?r.altitude+" m dpl":"-"],
+        ["Fisiografi",r.fisiografi],["Topografi",r.topografi],["Lereng Maks",r.lerengMaks],
+        ["Bahan Induk",r.bahanInduk],["Vegetasi",r.vegetasi],
+        ["Kedalaman Efektif",r.kedalamanEfektif]
+      ];
+      if(r.kedalamanGambut)item.push(["Kedalaman Gambut",r.kedalamanGambut+" cm"]);
+      if(r.jenisGambut)item.push(["Kelas Gambut",r.jenisGambut]);
+      if(r.kematanganGambut)item.push(["Kematangan Gambut",r.kematanganGambut]);
+      if(r.substratumGambut)item.push(["Substratum",r.substratumGambut]);
+      item=item.concat([
+        ["Air Tanah",r.airTanah],["Drainase",r.drainase],["Epipedon",r.epipedon],
+        ["Bawah Permukaan",r.bawahPermukaan],["Klasifikasi",r.klasifikasi],
+        ["Jenis Tanah",r.jenisTanah]
+      ]);
+      var tengah=Math.ceil(item.length/2);
+      function tabel(bag){
+        return '<table class="info">'+bag.map(function(x){return baris(x[0],x[1]);}).join("")+'</table>';
+      }
+      return '<div class="two"><div>'+tabel(item.slice(0,tengah))+'</div>'+
+             '<div>'+tabel(item.slice(tengah))+'</div></div>';
+    })()+
     '<div class="sect">Sifat Tekstur & Kimia Topsoil / Subsoil</div>'+
     '<table class="hz"><thead><tr><th>Parameter</th><th>Topsoil</th><th>Subsoil</th></tr></thead><tbody>'+
       '<tr><td>Tekstur</td><td style="text-align:center">'+esc(r.teksturTopsoil||"-")+'</td><td style="text-align:center">'+esc(r.teksturSubsoil||"-")+'</td></tr>'+
