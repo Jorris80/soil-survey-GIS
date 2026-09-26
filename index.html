@@ -130,7 +130,7 @@ var OPSI = {"fisiografi": ["Aluvial (< 10m)", "Teras (< 10 m)", "Plain (0 - 50 m
 /* ===== IDENTITAS & VERSI APLIKASI ===== */
 var APP = {
   nama: "Soil Survey GIS",
-  versi: "1.10.0",
+  versi: "1.11.0",
   build: "2026-08-28",
   penyedia: "",            // diisi penyedia: nama badan usaha
   kontak: "",              // diisi penyedia: email / WhatsApp dukungan
@@ -658,7 +658,7 @@ function saveRecord(){
 
   // OFFLINE: simpan lokal langsung (foto tetap base64), tandai pending
   if(offline){
-    var rec=Object.assign({},f,{id:id,horizons:horizons,fotos:fotos,foto:JSON.stringify(fotos),syncStatus:"local",_pendingPhotos:fotos.some(function(d){return /^data:/.test(d);})});
+    var rec=Object.assign({},f,{id:id,horizons:horizons,fotos:fotos,foto:JSON.stringify(fotos.filter(function(d){return /^https?:\/\//.test(d);})),syncStatus:"local",_pendingPhotos:fotos.some(function(d){return /^data:/.test(d);})});
     finishLocal(rec,false);
     return;
   }
@@ -679,7 +679,7 @@ function saveRecord(){
     finishLocal(rec,true);
   }).catch(function(e){
     if(isOffline(e)){ // koneksi putus di tengah → simpan lokal
-      var recL=Object.assign({},f,{id:id,horizons:horizons,fotos:fotos,foto:JSON.stringify(fotos),syncStatus:"local",_pendingPhotos:needUpload});
+      var recL=Object.assign({},f,{id:id,horizons:horizons,fotos:fotos,foto:JSON.stringify(fotos.filter(function(d){return /^https?:\/\//.test(d);})),syncStatus:"local",_pendingPhotos:needUpload});
       finishLocal(recL,false);return;
     }
     if(btn){btn.disabled=false;btn.innerHTML="💾 "+(S.editingId?"Update Record":"Simpan Record");}
@@ -1184,7 +1184,99 @@ function gabungRecords(lokal,server){
   return hasil;
 }
 
-function saveLocal(){try{localStorage.setItem("ss_records",JSON.stringify(S.records));localStorage.setItem("ss_ss",S.ss);}catch(e){}}
+/* ============================================================================
+   PENYIMPANAN FOTO LURING — IndexedDB
+   MASALAH LAMA: foto base64 ikut disimpan di localStorage (kuota ±5 MB) dan
+   bahkan tersimpan GANDA (fotos[] + foto). Setelah ~4 foto, setItem gagal
+   dengan QuotaExceededError yang ditelan diam-diam, sehingga SELURUH data
+   batal tersimpan dan foto hilang saat aplikasi dibuka lagi.
+   SOLUSI: metadata tetap di localStorage (ringan), foto disimpan di IndexedDB
+   yang kuotanya jauh lebih besar.
+   ========================================================================== */
+var _idb=null;
+function idbOpen(){
+  if(_idb)return Promise.resolve(_idb);
+  return new Promise(function(res,rej){
+    if(!window.indexedDB)return rej(new Error("IndexedDB tidak tersedia"));
+    var rq=indexedDB.open("ssgis_media",1);
+    rq.onupgradeneeded=function(e){var db=e.target.result;if(!db.objectStoreNames.contains("fotos"))db.createObjectStore("fotos");};
+    rq.onsuccess=function(){_idb=rq.result;res(_idb);};
+    rq.onerror=function(){rej(rq.error||new Error("IndexedDB gagal dibuka"));};
+  });
+}
+function idbPut(k,v){return idbOpen().then(function(db){return new Promise(function(res,rej){
+  var t=db.transaction("fotos","readwrite");t.objectStore("fotos").put(v,k);
+  t.oncomplete=function(){res();};t.onerror=function(){rej(t.error);};});});}
+function idbGet(k){return idbOpen().then(function(db){return new Promise(function(res,rej){
+  var t=db.transaction("fotos","readonly"),rq=t.objectStore("fotos").get(k);
+  rq.onsuccess=function(){res(rq.result||null);};rq.onerror=function(){rej(rq.error);};});});}
+function idbDel(k){return idbOpen().then(function(db){return new Promise(function(res){
+  var t=db.transaction("fotos","readwrite");t.objectStore("fotos").delete(k);
+  t.oncomplete=function(){res();};t.onerror=function(){res();};});}).catch(function(){});}
+
+/* Simpan: foto base64 dipindah ke IndexedDB, di localStorage hanya penanda. */
+function saveLocal(){
+  var adaBase64=false;
+  var ringkas=(S.records||[]).map(function(r){
+    var c=Object.assign({},r);
+    c.fotos=(r.fotos||[]).map(function(d,i){
+      if(typeof d==="string"&&/^data:/.test(d)){
+        adaBase64=true;
+        var k="f:"+r.id+":"+i;
+        idbPut(k,d).catch(function(){});
+        return "idb:"+k;                       // penanda ringan
+      }
+      return d;
+    });
+    // Jangan pernah menyimpan base64 dua kali.
+    if(/data:/.test(String(c.foto||""))){
+      c.foto=JSON.stringify((c.fotos||[]).filter(function(x){return /^https?:\/\//.test(x);}));
+    }
+    return c;
+  });
+  try{
+    localStorage.setItem("ss_records",JSON.stringify(ringkas));
+    localStorage.setItem("ss_ss",S.ss);
+    S._simpanGagal=false;
+  }catch(e){
+    // Kuota penuh: BERI TAHU pengguna, jangan ditelan diam-diam.
+    S._simpanGagal=true;
+    var pesan=(e&&/quota|exceeded/i.test(e.name+" "+e.message))
+      ? "⚠️ Penyimpanan perangkat penuh. Sinkronkan data ke server lalu ulangi."
+      : "⚠️ Gagal menyimpan ke perangkat: "+((e&&e.message)||"tidak diketahui");
+    try{toast(pesan,"err");}catch(e2){}
+  }
+  if(adaBase64&&!window.indexedDB){
+    try{toast("Perangkat ini tidak mendukung penyimpanan foto luring. Sinkronkan segera saat online.","err");}catch(e){}
+  }
+}
+
+/* Kembalikan foto dari IndexedDB ke dalam data (dipanggil saat aplikasi dibuka). */
+function pulihkanFoto(){
+  var tugas=[];
+  (S.records||[]).forEach(function(r){
+    (r.fotos||[]).forEach(function(d,i){
+      if(typeof d==="string"&&d.indexOf("idb:")===0){
+        tugas.push(idbGet(d.slice(4)).then(function(v){
+          if(v)r.fotos[i]=v;
+        }).catch(function(){}));
+      }
+    });
+  });
+  if(!tugas.length)return Promise.resolve();
+  return Promise.all(tugas).then(function(){
+    // Buang penanda yang datanya sudah tidak ada agar tidak diunggah sebagai sampah.
+    (S.records||[]).forEach(function(r){
+      r.fotos=(r.fotos||[]).filter(function(d){return !(typeof d==="string"&&d.indexOf("idb:")===0);});
+    });
+  });
+}
+
+/* Bersihkan foto di IndexedDB setelah record benar-benar tersinkron. */
+function bersihkanFotoIdb(rec){
+  if(!rec||!rec.id)return;
+  for(var i=0;i<12;i++)idbDel("f:"+rec.id+":"+i);
+}
 /* Menyimpan berkas base64 berkali-kali membuat aplikasi tersendat.
    Selama sinkron, penyimpanan dijeda dan digabung menjadi satu penulisan. */
 function saveLocalJeda(){
@@ -2043,9 +2135,14 @@ function clearMbtiles(){if(_mbtiles){_map.removeLayer(_mbtiles);_mbtiles=null;}v
 /* ===== BOOT ===== */
 function boot(){
   try{ loadLocal(); loadPLocal(); loadSession(); }catch(e){}
+  // Foto luring disimpan di IndexedDB → dipulihkan dulu sebelum sinkron,
+  // agar tidak ada data yang terkirim tanpa fotonya.
+  var siapFoto=(function(){ try{ return pulihkanFoto(); }catch(e){ return Promise.resolve(); } })();
   // Sudah ada sesi tersimpan? Langsung masuk (tanpa wajib server → bisa OFFLINE).
   try{
-    if(S.session&&S.session.username&&S.ss){ S._gate=false; S.tab="form"; loadCustomBase(); boot2(); jadwalCekLisensi(); pasangTombolKembali();
+    if(S.session&&S.session.username&&S.ss){ S._gate=false; S.tab="form"; loadCustomBase();
+      siapFoto.then(function(){ try{ boot2(); }catch(e){} });
+      jadwalCekLisensi(); pasangTombolKembali();
       if(navigator.onLine){
         try{ call("setAuthHint",S.ss,{username:S.session.username,email:S.session.email,sessionToken:S.session.sessionToken}).catch(function(){}); }catch(e){}
         validasiSesi(); refreshLicense();   // sinkron ditangani boot2 (berurutan)
@@ -2711,6 +2808,7 @@ function syncPending(){
           } else {
             rec._pendingPhotos=false;
             rec.syncStatus="synced";
+            bersihkanFotoIdb(rec);          // foto sudah di Drive, bebaskan ruang perangkat
             done++;
           }
           saveLocalJeda();                     // simpan progres (digabung, anti-tersendat)
@@ -3014,7 +3112,12 @@ function pasangTombolKembali(){
   });
 }
 
-function enterApp(){S._gate=false;S.tab="form";saveSession();loadCustomBase();boot2();refreshLicense();jadwalCekLisensi();pasangTombolKembali();}
+function enterApp(){
+  S._gate=false;S.tab="form";saveSession();loadCustomBase();
+  var p=Promise.resolve(); try{p=pulihkanFoto();}catch(e){}
+  p.then(function(){ try{boot2();}catch(e){} });
+  refreshLicense();jadwalCekLisensi();pasangTombolKembali();
+}
 try{window.saveSession=saveSession;window.S=S;}catch(e){}
 
 </script>
