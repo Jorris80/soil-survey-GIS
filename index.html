@@ -130,7 +130,7 @@ var OPSI = {"fisiografi": ["Aluvial (< 10m)", "Teras (< 10 m)", "Plain (0 - 50 m
 /* ===== IDENTITAS & VERSI APLIKASI ===== */
 var APP = {
   nama: "Soil Survey GIS",
-  versi: "1.9.0",
+  versi: "1.10.0",
   build: "2026-08-28",
   penyedia: "",            // diisi penyedia: nama badan usaha
   kontak: "",              // diisi penyedia: email / WhatsApp dukungan
@@ -1341,8 +1341,16 @@ function viewMap(){
 function gisPanelHTML(){
   function bb(k,l){return '<button class="btn '+((S.base||"street")===k?"btn-p":"btn-s")+'" style="flex:1;padding:8px;font-size:11px" onclick="setBase(\''+k+'\')">'+l+'</button>';}
   var extraList=(_extraLayers||[]).map(function(x,i){
-    return '<div class="row" style="justify-content:space-between;font-size:11px;padding:3px 0"><span>'+esc(x.name)+'</span>'+
+    var baris='<div style="padding:4px 0;border-bottom:1px solid var(--garis)">'+
+      '<div class="row" style="justify-content:space-between;font-size:11px"><span>'+esc(x.name)+'</span>'+
       '<span><input type="checkbox" '+(x.on?"checked":"")+' onchange="toggleExtra('+i+',this.checked)" style="width:auto"/> <a href="#" onclick="removeExtra('+i+');return false" style="color:#dc2626">✕</a></span></div>';
+    if(x.layer&&x.layer.setOpacity){
+      baris+='<div class="row" style="gap:6px;align-items:center;margin-top:3px">'+
+        '<span style="font-size:9px;color:var(--redup)">Transparansi</span>'+
+        '<input type="range" min="0.1" max="1" step="0.05" value="'+(x.opacity||1)+'" oninput="setOpacity('+i+',this.value)" style="flex:1"/>'+
+      '</div>';
+    }
+    return baris+'</div>';
   }).join("");
   return '<div class="card" style="margin:0;background:var(--krem)">'+
     '<label class="lbl">Tipe Basemap</label>'+
@@ -1383,6 +1391,10 @@ function gisPanelHTML(){
     '<div class="sep"><label class="lbl">Unggah Layer File (SHP / KML / GeoJSON)</label>'+
       '<label class="btn btn-s btn-full" style="border-style:dashed;flex-direction:column;padding:12px"><span style="font-size:20px">📂</span><span style="font-size:11px" id="gisFileName">GeoJSON, KML, atau SHP (.zip)</span><input type="file" accept=".geojson,.json,.kml,.zip" style="display:none" onchange="loadCustomLayer(this)"/></label>'+
       '<div class="hint">Shapefile: unggah <b>.zip</b> berisi .shp/.shx/.dbf/(.prj).</div>'+
+    '</div>'+
+    '<div class="sep"><label class="lbl">PDF Bergeoreferensi (GeoPDF)</label>'+
+      '<label class="btn btn-s btn-full" style="border-style:dashed;flex-direction:column;padding:12px;color:#b45309"><span style="font-size:20px">📄</span><span style="font-size:11px" id="pdfName">Unggah peta PDF (.pdf)</span><input type="file" accept=".pdf,application/pdf" style="display:none" onchange="loadGeoPdf(this)"/></label>'+
+      '<div class="hint">Peta PDF hasil ekspor QGIS (Geospatial PDF) otomatis terpasang sesuai koordinatnya. Bila koordinat tak terbaca, Anda dapat memasukkan batasnya secara manual.</div>'+
     '</div>'+
     '<div class="sep"><label class="lbl">MBTiles Raster (offline)</label>'+
       '<label class="btn btn-s btn-full" style="border-style:dashed;flex-direction:column;padding:12px;color:#2563eb"><span style="font-size:20px">🗄️</span><span style="font-size:11px" id="mbtName">Unggah .mbtiles</span><input type="file" accept=".mbtiles" style="display:none" onchange="loadMbtiles(this)"/></label>'+
@@ -1828,6 +1840,179 @@ function makeMbtilesLayer(db){
   });
   return new Proto("",{tms:false,maxZoom:22,minZoom:0});
 }
+
+/* ============================================================================
+   LAYER PDF BERGEOREFERENSI (GeoPDF / Geospatial PDF)
+   - Halaman PDF dirender menjadi gambar, lalu ditempatkan di peta sesuai
+     koordinat buminya.
+   - Georeferensi dibaca otomatis dari struktur PDF (ISO 32000 VP/Measure GPTS,
+     atau OGC LGIDict). Bila PDF terkompresi sehingga tak terbaca, pengguna
+     dapat memasukkan batas koordinat secara manual.
+   ========================================================================== */
+function ensurePdfJs(){
+  return new Promise(function(res,rej){
+    if(window.pdfjsLib)return res();
+    var sumber=[
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
+      "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js",
+      "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js"
+    ];
+    var w=[
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js",
+      "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js",
+      "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js"
+    ];
+    var i=0;
+    (function coba(){
+      if(window.pdfjsLib){try{window.pdfjsLib.GlobalWorkerOptions.workerSrc=w[Math.max(0,i-1)];}catch(e){}return res();}
+      if(i>=sumber.length)return rej(new Error("Gagal memuat pustaka PDF. Perlu internet sekali."));
+      var sc=document.createElement("script");
+      sc.src=sumber[i++];
+      sc.onload=function(){coba();};
+      sc.onerror=function(){coba();};
+      document.head.appendChild(sc);
+    })();
+  });
+}
+
+/* Baca georeferensi dari byte mentah PDF.
+   ISO 32000-2: /VP [ << /Measure << /GPTS [lat lon lat lon ...] /LPTS [...] >> >> ]
+   OGC GeoPDF : /LGIDict << /Registration [[x y lat lon] ...] >> */
+function bacaGeoPdf_(bytes){
+  var teks="";
+  var n=Math.min(bytes.length, 6000000);
+  for(var i=0;i<n;i++)teks+=String.fromCharCode(bytes[i]);
+
+  function angka(str){
+    return (str||"").trim().split(/[\s,]+/).map(parseFloat).filter(function(x){return isFinite(x);});
+  }
+  // 1) ISO 32000 — GPTS
+  var m=teks.match(/\/GPTS\s*\[([^\]]{10,400})\]/);
+  if(m){
+    var g=angka(m[1]);
+    if(g.length>=8){
+      var lat=[],lng=[];
+      for(var k=0;k+1<g.length;k+=2){lat.push(g[k]);lng.push(g[k+1]);}
+      var res=rentangSah_(lat,lng);
+      if(res)return Object.assign(res,{sumber:"GPTS (ISO 32000)"});
+    }
+  }
+  // 2) OGC GeoPDF — Registration
+  var r=teks.match(/\/Registration\s*\[([\s\S]{20,1200}?)\]\s*(?:\/|>>)/);
+  if(r){
+    var pasang=r[1].match(/\[([^\]]+)\]/g)||[];
+    var la=[],ln=[];
+    pasang.forEach(function(q){
+      var v=angka(q.replace(/[\[\]]/g,""));
+      if(v.length>=4){la.push(v[2]);ln.push(v[3]);}
+    });
+    var res2=rentangSah_(la,ln);
+    if(res2)return Object.assign(res2,{sumber:"LGIDict (OGC GeoPDF)"});
+  }
+  return null;
+}
+function rentangSah_(lat,lng){
+  if(!lat.length||lat.length!==lng.length)return null;
+  var laMin=Math.min.apply(null,lat), laMax=Math.max.apply(null,lat);
+  var lnMin=Math.min.apply(null,lng), lnMax=Math.max.apply(null,lng);
+  // Kewajaran: dalam rentang bumi & bukan titik tunggal
+  if(!isFinite(laMin)||!isFinite(lnMin))return null;
+  if(laMin< -90||laMax>90||lnMin< -180||lnMax>180)return null;
+  if(Math.abs(laMax-laMin)<1e-9||Math.abs(lnMax-lnMin)<1e-9)return null;
+  return {south:laMin,north:laMax,west:lnMin,east:lnMax};
+}
+
+function loadGeoPdf(input){
+  var f=input.files&&input.files[0]; if(!f)return;
+  var nm=$("#pdfName"); if(nm)nm.textContent=f.name;
+  input.value="";
+  toast("Membaca PDF…","info");
+  ensurePdfJs().then(function(){
+    var fr=new FileReader();
+    fr.onload=function(){
+      var buf=fr.result;
+      var bytes=new Uint8Array(buf);
+      var geo=null;
+      try{ geo=bacaGeoPdf_(bytes); }catch(e){}
+      window.pdfjsLib.getDocument({data:bytes}).promise.then(function(pdf){
+        return pdf.getPage(1).then(function(page){
+          // Render pada resolusi memadai namun tetap hemat memori.
+          var vp1=page.getViewport({scale:1});
+          var skala=Math.min(3, Math.max(1, 2200/Math.max(vp1.width,vp1.height)));
+          var vp=page.getViewport({scale:skala});
+          var cv=document.createElement("canvas");
+          cv.width=Math.round(vp.width); cv.height=Math.round(vp.height);
+          var ctx=cv.getContext("2d");
+          ctx.fillStyle="#fff"; ctx.fillRect(0,0,cv.width,cv.height);
+          return page.render({canvasContext:ctx,viewport:vp}).promise.then(function(){
+            var url=cv.toDataURL("image/png");
+            if(geo){
+              pasangGeoPdf_(url,geo,f.name,pdf.numPages,geo.sumber);
+            } else {
+              S._pdfPending={url:url,nama:f.name,halaman:pdf.numPages};
+              tanyaBatasPdf_();
+            }
+          });
+        });
+      }).catch(function(e){toast("PDF gagal dibaca: "+e.message,"err");});
+    };
+    fr.readAsArrayBuffer(f);
+  }).catch(function(e){toast(e.message,"err");});
+}
+
+function pasangGeoPdf_(url,geo,nama,halaman,sumber){
+  var bounds=[[geo.south,geo.west],[geo.north,geo.east]];
+  var lyr=L.imageOverlay(url,bounds,{opacity:0.85,interactive:false});
+  lyr.addTo(_map);
+  _extraLayers.push({name:"PDF "+nama,layer:lyr,on:true,type:"geopdf",opacity:0.85});
+  try{_map.fitBounds(bounds,{padding:[20,20]});}catch(e){}
+  toast("PDF dipasang di peta"+(sumber?" — georeferensi "+sumber:"")+(halaman>1?" (halaman 1 dari "+halaman+")":"")+".","ok");
+  refreshGisPanel();
+}
+
+/* Formulir batas manual bila georeferensi tidak terbaca. */
+function tanyaBatasPdf_(){
+  var b=null; try{ b=_map.getBounds(); }catch(e){}
+  var s=b?b.getSouth().toFixed(6):"", n=b?b.getNorth().toFixed(6):"";
+  var w=b?b.getWest().toFixed(6):"", t=b?b.getEast().toFixed(6):"";
+  var sh=$("#rptSheet"); if(!sh)return;
+  sh.innerHTML='<div style="max-width:560px;margin:0 auto;font-size:12px;line-height:1.6">'+
+    '<h2 style="font-size:15px;color:#1b4d3e;margin:0 0 6px">Georeferensi PDF Tidak Terbaca</h2>'+
+    '<p style="color:#444">PDF ini tidak memuat informasi koordinat yang dapat dibaca, atau strukturnya terkompresi. '+
+    'Masukkan batas koordinat peta secara manual. Nilai di bawah terisi dari tampilan peta saat ini — '+
+    'geser/zoom peta ke posisi yang benar sebelum membuka menu ini agar lebih mudah.</p>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">'+
+      '<div><label style="font-size:10px;font-weight:700">Lintang Utara (North)</label><input id="pdfN" value="'+n+'" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px"/></div>'+
+      '<div><label style="font-size:10px;font-weight:700">Lintang Selatan (South)</label><input id="pdfS" value="'+s+'" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px"/></div>'+
+      '<div><label style="font-size:10px;font-weight:700">Bujur Barat (West)</label><input id="pdfW" value="'+w+'" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px"/></div>'+
+      '<div><label style="font-size:10px;font-weight:700">Bujur Timur (East)</label><input id="pdfE" value="'+t+'" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px"/></div>'+
+    '</div>'+
+    '<button onclick="terapkanBatasPdf()" style="width:100%;margin-top:12px;padding:11px;background:#1b4d3e;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer">Pasang di Peta</button>'+
+    '<p style="font-size:11px;color:#666;margin-top:10px">Tip: koordinat batas dapat dilihat di QGIS melalui <b>Layer Properties → Information → Extent</b>, '+
+    'atau saat mengekspor Geospatial PDF. Pastikan sistem koordinatnya <b>EPSG:4326 (WGS 84)</b>.</p>'+
+  '</div>';
+  $("#rptTitle").textContent="Pasang Layer PDF";
+  $("#rptPrint").style.display="none";
+  var m=$("#rptModal"); if(m)m.style.display="flex";
+}
+function terapkanBatasPdf(){
+  var pd=S._pdfPending; if(!pd){rptClose();return;}
+  var n=parseFloat(($("#pdfN").value||"").trim()), s2=parseFloat(($("#pdfS").value||"").trim());
+  var w=parseFloat(($("#pdfW").value||"").trim()), e=parseFloat(($("#pdfE").value||"").trim());
+  if(![n,s2,w,e].every(isFinite)){toast("Lengkapi keempat koordinat.","err");return;}
+  if(n<=s2||e<=w){toast("Batas tidak wajar: Utara harus > Selatan, Timur harus > Barat.","err");return;}
+  var pr=$("#rptPrint"); if(pr)pr.style.display="";
+  rptClose();
+  pasangGeoPdf_(pd.url,{south:s2,north:n,west:w,east:e},pd.nama,pd.halaman,"manual");
+  S._pdfPending=null;
+}
+
+/* Atur transparansi layer PDF/raster. */
+function setOpacity(i,v){
+  var x=_extraLayers[i]; if(!x||!x.layer||!x.layer.setOpacity)return;
+  x.opacity=parseFloat(v); x.layer.setOpacity(x.opacity);
+}
+
 function loadMbtiles(input){
   var f=input.files&&input.files[0];if(!f)return;
   var nm=$("#mbtName");if(nm)nm.textContent="Memuat "+f.name+"…";

@@ -21,7 +21,7 @@ self.addEventListener("fetch", function (e) {
   var UBIN = ["tile.openstreetmap.org", "tile.osm.org", "tile.opentopomap.org",
               "api.maptiler.com", "api.mapbox.com", "arcgisonline.com", "ibasemaps-api.arcgis.com"];
   for (var t = 0; t < UBIN.length; t++) { if (url.indexOf(UBIN[t]) !== -1) return; }
-  if (req.method === "POST" || url.indexOf("script.google.com") !== -1 || url.indexOf("googleusercontent.com") !== -1 || url.indexOf("cdnjs.cloudflare.com") !== -1 || url.indexOf("unpkg.com") !== -1 || url.indexOf("api.anthropic.com") !== -1) return;
+  if (req.method === "POST" || url.indexOf("script.google.com") !== -1 || url.indexOf("googleusercontent.com") !== -1 || url.indexOf("cdnjs.cloudflare.com") !== -1 || url.indexOf("unpkg.com") !== -1 || url.indexOf("cdn.jsdelivr.net") !== -1 || url.indexOf("api.anthropic.com") !== -1) return;
   if (req.mode === "navigate") {
     e.respondWith(fetch(req).then(function (r) {
       var cp = r.clone(); caches.open(VERSI).then(function (c) { c.put("./index.html", cp); }); return r;
