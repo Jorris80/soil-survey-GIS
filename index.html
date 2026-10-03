@@ -121,7 +121,7 @@
 "use strict";
 /* ===== KONFIGURASI ===== */
 // Untuk mode PWA/GitHub Pages: isi URL Web App (…/exec). Di Apps Script biarkan kosong.
-window.__API_URL__ = window.__API_URL__ || "https://script.google.com/macros/s/AKfycbyVFITOHYbGOFybmOzJzr34bPtTD7q52zJ4PcRRg61smmBklOeEhgPDkD0OHd5qGtr5Ig/exec";
+window.__API_URL__ = window.__API_URL__ || "";
 
 /* ===== DATA PILIHAN (dari CSV) ===== */
 var OPSI = {"fisiografi": ["Aluvial (< 10m)", "Teras (< 10 m)", "Plain (0 - 50 m)", "Hilly (50 - 300 m)", "Mountain (> 300 m)"], "topografi": ["Flat (0 - 3 %)", "Undulating (4 - 8 %)", "Rolling (9 - 15 %)", "Moderately Steep (16 - 25 %)", "Steep (26 - 40 %)", "Very Steep (> 40 %)"], "drainase": ["Excessively (ED)", "Somewhat Excessively (SE)", "Well (WD)", "Moderately Well (MD)", "Somewhat Poorly (SP)", "Poorly (PD)", "Very Poorly (VP)", "Subaqueous (SA)", "Ponded (P)", "Flooded (F)", "Non Observed (N)", "Ocean (O)"], "hue": ["5R", "7.5R", "10R", "2.5YR", "5YR", "7.5YR", "10YR", "2.5Y", "5Y", "10Y", "5GY", "GLEY 1", "GLEY 2"], "value": ["2,5", "3", "4", "5", "6", "7", "8"], "chroma": ["1", "2", "3", "4", "6", "8"], "tekstur": ["Coarse sand", "Sand", "Fine sand", "Very fine sand", "Loamy sand", "Sandy loam", "Silt", "Silt loam", "Loam", "Sandy clay loam", "Silty clay loam", "Clay loam", "Sandy clay", "Silty clay", "Clay", "Saprik", "Hemik", "Fibrik"], "konsistensi": ["Extremely Firm", "Very Firm", "Firm - Very Firm", "Firm", "Slightly Firm - Firm", "Slightly Firm", "Friable - Slightly Firm", "Friable", "Very Friable", "Loose", "Nonsticky", "Slightly Sticky", "Moderately Sticky", "Sticky", "Very Sticky"]};
@@ -130,7 +130,7 @@ var OPSI = {"fisiografi": ["Aluvial (< 10m)", "Teras (< 10 m)", "Plain (0 - 50 m
 /* ===== IDENTITAS & VERSI APLIKASI ===== */
 var APP = {
   nama: "Soil Survey GIS",
-  versi: "1.11.0",
+  versi: "1.12.0",
   build: "2026-08-28",
   penyedia: "",            // diisi penyedia: nama badan usaha
   kontak: "",              // diisi penyedia: email / WhatsApp dukungan
@@ -1484,6 +1484,10 @@ function gisPanelHTML(){
       '<label class="btn btn-s btn-full" style="border-style:dashed;flex-direction:column;padding:12px"><span style="font-size:20px">📂</span><span style="font-size:11px" id="gisFileName">GeoJSON, KML, atau SHP (.zip)</span><input type="file" accept=".geojson,.json,.kml,.zip" style="display:none" onchange="loadCustomLayer(this)"/></label>'+
       '<div class="hint">Shapefile: unggah <b>.zip</b> berisi .shp/.shx/.dbf/(.prj).</div>'+
     '</div>'+
+    '<div class="sep"><label class="lbl">GeoTIFF / TIFF (raster bergeoreferensi)</label>'+
+      '<label class="btn btn-s btn-full" style="border-style:dashed;flex-direction:column;padding:12px;color:#166534"><span style="font-size:20px">🛰️</span><span style="font-size:11px" id="tifName">Unggah .tif / .tiff</span><input type="file" accept=".tif,.tiff,image/tiff" style="display:none" onchange="loadGeoTiff(this)"/></label>'+
+      '<div class="hint">Mendukung EPSG:4326, EPSG:3857, dan UTM WGS 84 (zona 46–54, utara/selatan). Citra RGB tampil berwarna; raster satu pita (DEM/NDVI) tampil abu-abu dengan peregangan kontras.</div>'+
+    '</div>'+
     '<div class="sep"><label class="lbl">PDF Bergeoreferensi (GeoPDF)</label>'+
       '<label class="btn btn-s btn-full" style="border-style:dashed;flex-direction:column;padding:12px;color:#b45309"><span style="font-size:20px">📄</span><span style="font-size:11px" id="pdfName">Unggah peta PDF (.pdf)</span><input type="file" accept=".pdf,application/pdf" style="display:none" onchange="loadGeoPdf(this)"/></label>'+
       '<div class="hint">Peta PDF hasil ekspor QGIS (Geospatial PDF) otomatis terpasang sesuai koordinatnya. Bila koordinat tak terbaca, Anda dapat memasukkan batasnya secara manual.</div>'+
@@ -2012,6 +2016,169 @@ function rentangSah_(lat,lng){
   if(laMin< -90||laMax>90||lnMin< -180||lnMax>180)return null;
   if(Math.abs(laMax-laMin)<1e-9||Math.abs(lnMax-lnMin)<1e-9)return null;
   return {south:laMin,north:laMax,west:lnMin,east:lnMax};
+}
+
+
+/* ============================================================================
+   LAYER GEOTIFF / TIFF
+   Membaca raster GeoTIFF, menerjemahkan koordinatnya ke lintang-bujur, lalu
+   menampilkannya sebagai overlay peta.
+   Proyeksi yang didukung otomatis:
+     - EPSG:4326 (lintang-bujur WGS 84)
+     - EPSG:3857 (Web Mercator)
+     - UTM WGS 84 (EPSG:326xx utara, 327xx selatan) — umum untuk data Indonesia
+   Proyeksi lain → pengguna memasukkan batas koordinat secara manual.
+   ========================================================================== */
+function ensureGeoTiff(){
+  return new Promise(function(res,rej){
+    if(window.GeoTIFF)return res();
+    var sumber=[
+      "https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js",
+      "https://unpkg.com/geotiff@2.1.3/dist-browser/geotiff.js",
+      "https://cdn.jsdelivr.net/npm/geotiff@2.0.7/dist-browser/geotiff.js"
+    ];
+    var i=0;
+    (function coba(){
+      if(window.GeoTIFF)return res();
+      if(i>=sumber.length)return rej(new Error("Gagal memuat pustaka GeoTIFF. Perlu internet sekali."));
+      var sc=document.createElement("script");
+      sc.src=sumber[i++];
+      sc.onload=function(){coba();};
+      sc.onerror=function(){coba();};
+      document.head.appendChild(sc);
+    })();
+  });
+}
+
+/* Web Mercator (meter) → lintang/bujur. */
+function m3857ToLatLng_(x,y){
+  var lng=x/20037508.34*180;
+  var lat=y/20037508.34*180;
+  lat=180/Math.PI*(2*Math.atan(Math.exp(lat*Math.PI/180))-Math.PI/2);
+  return [lat,lng];
+}
+/* UTM (meter) → lintang/bujur, WGS 84. Rumus invers Transverse Mercator. */
+function utmToLatLng_(x,y,zona,selatan){
+  var a=6378137.0, f=1/298.257223563;
+  var e2=f*(2-f), e=Math.sqrt(e2);
+  var k0=0.9996;
+  var xx=x-500000.0;
+  var yy=selatan?(y-10000000.0):y;
+  var m=yy/k0;
+  var mu=m/(a*(1-e2/4-3*e2*e2/64-5*e2*e2*e2/256));
+  var e1=(1-Math.sqrt(1-e2))/(1+Math.sqrt(1-e2));
+  var j1=3*e1/2-27*e1*e1*e1/32, j2=21*e1*e1/16-55*Math.pow(e1,4)/32;
+  var j3=151*Math.pow(e1,3)/96, j4=1097*Math.pow(e1,4)/512;
+  var fp=mu+j1*Math.sin(2*mu)+j2*Math.sin(4*mu)+j3*Math.sin(6*mu)+j4*Math.sin(8*mu);
+  var ep2=e2/(1-e2);
+  var c1=ep2*Math.pow(Math.cos(fp),2);
+  var t1=Math.pow(Math.tan(fp),2);
+  var r1=a*(1-e2)/Math.pow(1-e2*Math.pow(Math.sin(fp),2),1.5);
+  var n1=a/Math.sqrt(1-e2*Math.pow(Math.sin(fp),2));
+  var d=xx/(n1*k0);
+  var q1=n1*Math.tan(fp)/r1, q2=d*d/2;
+  var q3=(5+3*t1+10*c1-4*c1*c1-9*ep2)*Math.pow(d,4)/24;
+  var q4=(61+90*t1+298*c1+45*t1*t1-3*c1*c1-252*ep2)*Math.pow(d,6)/720;
+  var lat=fp-q1*(q2-q3+q4);
+  var q5=d, q6=(1+2*t1+c1)*Math.pow(d,3)/6;
+  var q7=(5-2*c1+28*t1-3*c1*c1+8*ep2+24*t1*t1)*Math.pow(d,5)/120;
+  var lng=(q5-q6+q7)/Math.cos(fp);
+  var lng0=(zona-1)*6-180+3;
+  return [lat*180/Math.PI, lng0+lng*180/Math.PI];
+}
+
+/* Tentukan batas lintang-bujur dari metadata GeoTIFF. */
+function batasGeoTiff_(image){
+  var bbox;
+  try{ bbox=image.getBoundingBox(); }catch(e){ return null; }   // [minX,minY,maxX,maxY]
+  if(!bbox||bbox.length<4)return null;
+  var kode=0;
+  try{
+    var gk=image.getGeoKeys()||{};
+    kode=gk.ProjectedCSTypeGeoKey||gk.GeographicTypeGeoKey||0;
+  }catch(e){}
+
+  function pakai(fn,label){
+    var a=fn(bbox[0],bbox[1]), b=fn(bbox[2],bbox[3]);
+    var lat=[a[0],b[0]], lng=[a[1],b[1]];
+    var r=rentangSah_(lat,lng);
+    return r?Object.assign(r,{sumber:label}):null;
+  }
+  // Lintang-bujur langsung
+  if(kode===4326||kode===4322||(!kode&&Math.abs(bbox[0])<=180&&Math.abs(bbox[1])<=90&&Math.abs(bbox[2])<=180&&Math.abs(bbox[3])<=90)){
+    var r0=rentangSah_([bbox[1],bbox[3]],[bbox[0],bbox[2]]);
+    if(r0)return Object.assign(r0,{sumber:"EPSG:4326"});
+  }
+  if(kode===3857||kode===900913)return pakai(m3857ToLatLng_,"EPSG:3857");
+  // UTM WGS 84
+  if(kode>=32601&&kode<=32660)return pakai(function(x,y){return utmToLatLng_(x,y,kode-32600,false);},"UTM "+(kode-32600)+"N");
+  if(kode>=32701&&kode<=32760)return pakai(function(x,y){return utmToLatLng_(x,y,kode-32700,true);},"UTM "+(kode-32700)+"S");
+  return null;
+}
+
+function loadGeoTiff(input){
+  var f=input.files&&input.files[0]; if(!f)return;
+  var nm=$("#tifName"); if(nm)nm.textContent=f.name;
+  input.value="";
+  toast("Membaca GeoTIFF…","info");
+  ensureGeoTiff().then(function(){
+    var fr=new FileReader();
+    fr.onload=function(){
+      window.GeoTIFF.fromArrayBuffer(fr.result).then(function(tiff){
+        return tiff.getImage().then(function(image){
+          var geo=null; try{ geo=batasGeoTiff_(image); }catch(e){}
+          var lebar=image.getWidth(), tinggi=image.getHeight();
+          // Batasi ukuran render agar aman di HP.
+          var maxSisi=2000;
+          var sk=Math.min(1, maxSisi/Math.max(lebar,tinggi));
+          var w=Math.max(1,Math.round(lebar*sk)), h=Math.max(1,Math.round(tinggi*sk));
+          return image.readRasters({width:w,height:h}).then(function(data){
+            var url=rasterKeGambar_(data,w,h);
+            if(geo)pasangGeoPdf_(url,geo,f.name,1,"GeoTIFF "+geo.sumber);
+            else{ S._pdfPending={url:url,nama:f.name,halaman:1}; tanyaBatasPdf_(); }
+          });
+        });
+      }).catch(function(e){toast("GeoTIFF gagal dibaca: "+e.message,"err");});
+    };
+    fr.readAsArrayBuffer(f);
+  }).catch(function(e){toast(e.message,"err");});
+}
+
+/* Ubah data raster menjadi gambar. Mendukung RGB/RGBA dan satu pita
+   (abu-abu dengan peregangan kontras otomatis, mis. DEM/indeks vegetasi). */
+function rasterKeGambar_(data,w,h){
+  var cv=document.createElement("canvas"); cv.width=w; cv.height=h;
+  var ctx=cv.getContext("2d");
+  var img=ctx.createImageData(w,h);
+  var px=img.data;
+  var pita=data.length||1;
+  var noData=null;
+  if(pita>=3){
+    var R=data[0],G=data[1],B=data[2],A=(pita>=4)?data[3]:null;
+    for(var i=0;i<w*h;i++){
+      px[i*4]=R[i];px[i*4+1]=G[i];px[i*4+2]=B[i];
+      px[i*4+3]=A?A[i]:255;
+    }
+  } else {
+    var b=data[0]||data;
+    // Peregangan 2%-98% agar DEM/indeks tampil jelas.
+    var nilai=[];
+    for(var k=0;k<b.length;k+=Math.max(1,Math.floor(b.length/20000))){
+      var v=b[k]; if(isFinite(v))nilai.push(v);
+    }
+    nilai.sort(function(a,c){return a-c;});
+    var lo=nilai[Math.floor(nilai.length*0.02)]||0;
+    var hi=nilai[Math.floor(nilai.length*0.98)]||1;
+    var rentang=(hi-lo)||1;
+    for(var j=0;j<w*h;j++){
+      var val=b[j];
+      var g=Math.max(0,Math.min(255,Math.round((val-lo)/rentang*255)));
+      var tampak=isFinite(val)?255:0;
+      px[j*4]=g;px[j*4+1]=g;px[j*4+2]=g;px[j*4+3]=tampak;
+    }
+  }
+  ctx.putImageData(img,0,0);
+  return cv.toDataURL("image/png");
 }
 
 function loadGeoPdf(input){
